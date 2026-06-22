@@ -12,17 +12,42 @@ st.set_page_config(
 )
 
 
-# ---------- STYLE ----------
+# ---------- UI STYLE ----------
 st.markdown("""
 <style>
 
 .block-container {
-    padding-top: 2rem;
+    padding-top: 1.5rem;
 }
 
-h1 {
-    text-align: center;
+
+/* Hide default chat avatars */
+[data-testid="stChatMessageAvatar"] {
+    display: none;
 }
+
+
+/* Chat cards */
+.user-card {
+    background: #2b2b2b;
+    color: white;
+    padding: 14px;
+    border-radius: 18px;
+    margin-left: 25%;
+    margin-bottom: 10px;
+}
+
+
+.ai-card {
+    background: #161616;
+    color: #f5f5f5;
+    padding: 14px;
+    border-radius: 18px;
+    margin-right: 25%;
+    margin-bottom: 10px;
+    border: 1px solid #333;
+}
+
 
 .stButton button {
     border-radius: 12px;
@@ -32,10 +57,12 @@ h1 {
 """, unsafe_allow_html=True)
 
 
+
 # ---------- CLIENT ----------
 client = Groq(
     api_key=os.getenv("GROQ_API_KEY")
 )
+
 
 
 # ---------- MEMORY ----------
@@ -43,29 +70,36 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 
-# ---------- LATEX DISPLAY ----------
-def show_message(text):
-
-    parts = text.split("$$")
-
-    for i, part in enumerate(parts):
-
-        if i % 2 == 1:
-            st.latex(part)
-
-        else:
-            st.markdown(part)
-
-
 
 # ---------- SIDEBAR ----------
 with st.sidebar:
 
     st.title("⚒️ StudyForge")
-    st.caption("Your AI-powered learning workspace")
+
+    st.caption(
+        "Your AI learning workspace"
+    )
+
+
+    if st.button("◀ Collapse Sidebar"):
+
+        st.markdown(
+            """
+            <script>
+            window.parent.document
+            .querySelector('[data-testid="stSidebarCollapseButton"]')
+            .click();
+            </script>
+            """,
+            unsafe_allow_html=True
+        )
+
+
+    st.divider()
+
 
     subject = st.selectbox(
-        "📚 Subject",
+        "Subject",
         [
             "Math",
             "Physics"
@@ -74,7 +108,7 @@ with st.sidebar:
 
 
     depth = st.selectbox(
-        "🧠 Learning Depth",
+        "Learning Depth",
         [
             "Basic",
             "Standard",
@@ -84,19 +118,19 @@ with st.sidebar:
 
 
     exam_mode = st.toggle(
-        "📝 Exam Mode"
+        "Exam Mode"
     )
 
 
     hint_mode = st.toggle(
-        "💡 Hint Mode"
+        "Hint Mode"
     )
 
 
     st.divider()
 
 
-    if st.button("🗑️ Clear Chat"):
+    if st.button("Clear Chat"):
 
         st.session_state.messages = []
         st.rerun()
@@ -112,84 +146,76 @@ st.caption(
 
 
 
-# ---------- OLD CHAT ----------
+# ---------- LATEX ----------
+def show_message(text):
+
+    parts = text.split("$$")
+
+    for i, part in enumerate(parts):
+
+        if i % 2 == 1:
+            st.latex(part)
+
+        else:
+            st.markdown(part)
+
+
+
+# ---------- CHAT HISTORY ----------
 for message in st.session_state.messages:
 
 
     if message["role"] == "user":
 
-        with st.chat_message("user"):
-
-            st.markdown(
-                f"""
-                <div style="
-                background:#DCF8C6;
-                padding:12px;
-                border-radius:15px;
-                margin-left:20%;
-                ">
-                {message["content"]}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+        st.markdown(
+            f"""
+            <div class="user-card">
+            {message["content"]}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 
     else:
 
-        with st.chat_message("assistant"):
+        st.markdown(
+            """
+            <div class="ai-card">
+            """,
+            unsafe_allow_html=True
+        )
 
-            st.markdown(
-                """
-                <div style="
-                background:#F1F1F1;
-                padding:12px;
-                border-radius:15px;
-                margin-right:20%;
-                ">
-                """,
-                unsafe_allow_html=True
-            )
+        show_message(
+            message["content"]
+        )
 
-
-            show_message(
-                message["content"]
-            )
-
-
-            st.markdown(
-                "</div>",
-                unsafe_allow_html=True
-            )
+        st.markdown(
+            "</div>",
+            unsafe_allow_html=True
+        )
 
 
 
 # ---------- INPUT ----------
 question = st.chat_input(
-    "Ask a Math or Physics question..."
+    "Ask a question..."
 )
 
 
 
-# ---------- AI RESPONSE ----------
+# ---------- AI ----------
 if question:
 
 
-    with st.chat_message("user"):
-
-        st.markdown(
-            f"""
-            <div style="
-            background:#DCF8C6;
-            padding:12px;
-            border-radius:15px;
-            margin-left:20%;
-            ">
-            {question}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+    st.markdown(
+        f"""
+        <div class="user-card">
+        {question}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
     st.session_state.messages.append(
@@ -200,39 +226,35 @@ if question:
     )
 
 
-
     if hint_mode:
 
         answer_style = """
 Give hints only.
-Do not reveal the final answer unless the user asks.
+Do not give final answer.
 """
-
 
     else:
 
         answer_style = """
-Give the complete solution.
+Give full solution.
 """
-
 
 
     if exam_mode:
 
         format_style = """
-Use exam format:
+Use:
 
 Given:
 Formula:
-Working:
-Final Answer:
+Steps:
+Answer:
 """
-
 
     else:
 
         format_style = """
-Explain like a personal tutor.
+Teach clearly.
 """
 
 
@@ -241,74 +263,68 @@ Explain like a personal tutor.
 
 You are StudyForge, an expert {subject} tutor.
 
-Learning depth:
+Depth:
 {depth}
 
 Rules:
+- Be accurate.
+- Show equations.
+- Show calculations.
+- Fix mistakes before replying.
+- Use LaTeX with $$ symbols.
 
-- Give accurate answers.
-- Solve carefully.
-- For numerical problems:
-  - Write equations.
-  - Substitute values.
-  - Show calculations.
-- Be careful with percentages, units, and algebra.
-- Correct mistakes before responding.
-
-Do not mention:
-- checking
-- verification
-- internal reasoning
-
-Math:
-Use LaTeX with $$ symbols for equations.
-
-Physics:
-Include formulas and units.
+Do not mention internal checking.
 
 {format_style}
 
 {answer_style}
 
-Make answers clear and student-friendly.
-
 """
 
 
-    with st.chat_message("assistant"):
+
+    with st.spinner(
+        "Thinking..."
+    ):
+
+        response = client.chat.completions.create(
+
+            model="llama-3.1-8b-instant",
+
+            messages=[
+
+                {
+                    "role":"system",
+                    "content":prompt
+                },
+
+                {
+                    "role":"user",
+                    "content":question
+                }
+
+            ]
+
+        )
 
 
-        with st.spinner(
-            "Thinking... ⚒️"
-        ):
+        answer = response.choices[0].message.content
 
 
-            response = client.chat.completions.create(
 
-                model="llama-3.1-8b-instant",
+    st.markdown(
+        """
+        <div class="ai-card">
+        """,
+        unsafe_allow_html=True
+    )
 
-                messages=[
+    show_message(answer)
 
-                    {
-                        "role":"system",
-                        "content":prompt
-                    },
-
-                    {
-                        "role":"user",
-                        "content":question
-                    }
-
-                ]
-
-            )
-
-
-            answer = response.choices[0].message.content
-
-
-            show_message(answer)
-
+    st.markdown(
+        "</div>",
+        unsafe_allow_html=True
+    )
 
 
     st.session_state.messages.append(
