@@ -23,18 +23,16 @@ st.markdown("""
     padding:14px;
     border-radius:14px;
     margin:10px 0;
-    border:1px solid rgba(100,100,100,0.25);
+    border:1px solid rgba(120,120,120,0.25);
 }
 
-
 .ai-box {
-    background: rgba(130,130,130,0.18);
+    background: rgba(140,140,140,0.18);
     padding:14px;
     border-radius:14px;
     margin:10px 0;
-    border:1px solid rgba(100,100,100,0.25);
+    border:1px solid rgba(120,120,120,0.25);
 }
-
 
 textarea {
     background: transparent !important;
@@ -50,7 +48,7 @@ textarea {
 # =====================
 
 if "GROQ_API_KEY" not in st.secrets:
-    st.error("Add GROQ_API_KEY in Streamlit Secrets")
+    st.error("Missing GROQ_API_KEY in Streamlit Secrets")
     st.stop()
 
 
@@ -74,29 +72,30 @@ cursor = db.cursor()
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS chats(
-    id TEXT PRIMARY KEY,
-    title TEXT
+id TEXT PRIMARY KEY,
+title TEXT
 )
 """)
 
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS messages(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    chat_id TEXT,
-    role TEXT,
-    content TEXT
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+chat_id TEXT,
+role TEXT,
+content TEXT
 )
 """)
 
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS feedback(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    response TEXT,
-    rating TEXT
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+response TEXT,
+rating TEXT
 )
 """)
+
 
 db.commit()
 
@@ -104,23 +103,23 @@ db.commit()
 
 def create_chat():
 
-    chat_id = str(uuid.uuid4())
+    cid = str(uuid.uuid4())
 
     cursor.execute(
         "INSERT INTO chats VALUES (?,?)",
-        (chat_id,"New Chat")
+        (cid,"New Chat")
     )
 
     db.commit()
 
-    return chat_id
+    return cid
 
 
 
 def get_chats():
 
     cursor.execute(
-        "SELECT * FROM chats"
+        "SELECT * FROM chats ORDER BY rowid DESC"
     )
 
     return cursor.fetchall()
@@ -131,8 +130,9 @@ def save_message(chat,role,text):
 
     cursor.execute(
         """
-        INSERT INTO messages(chat_id,role,content)
-        VALUES(?,?,?)
+        INSERT INTO messages
+        (chat_id,role,content)
+        VALUES (?,?,?)
         """,
         (chat,role,text)
     )
@@ -178,7 +178,7 @@ def save_feedback(text,rating):
     cursor.execute(
         """
         INSERT INTO feedback(response,rating)
-        VALUES(?,?)
+        VALUES (?,?)
         """,
         (text,rating)
     )
@@ -188,7 +188,7 @@ def save_feedback(text,rating):
 
 
 # =====================
-# SESSION CHAT
+# SESSION
 # =====================
 
 if "chat_id" not in st.session_state:
@@ -204,75 +204,94 @@ if "chat_id" not in st.session_state:
 
 
 # =====================
-# SUBJECT SYSTEM
+# SUBJECTS
 # =====================
 
 SUBJECTS = [
-    "Mathematics",
-    "Physics",
-    "Chemistry",
-    "Biology",
-    "Computer Science",
-    "English",
-    "History",
-    "Geography",
-    "Economics",
-    "Social Science",
-    "General"
+"Mathematics",
+"Physics",
+"Chemistry",
+"Biology",
+"Computer Science",
+"English",
+"History",
+"Geography",
+"Economics",
+"Social Science",
+"General"
 ]
+
 
 
 def detect_subject(q):
 
-    q=q.lower()
+    q = q.lower()
 
-    data={
+
+    data = {
 
     "Mathematics":
-    ["math","equation","algebra","calculus"],
+    ["math","equation","algebra","calculus",
+     "geometry","probability"],
 
     "Physics":
-    ["force","energy","motion","velocity"],
+    ["force","energy","motion",
+     "velocity","physics"],
 
     "Chemistry":
-    ["atom","reaction","chemical"],
+    ["atom","reaction",
+     "chemical","chemistry"],
 
     "Biology":
     ["cell","dna","biology"],
 
     "Computer Science":
-    ["code","python","algorithm"],
+    ["code","python",
+     "algorithm","program"],
 
     "English":
-    ["grammar","essay","writing"],
+    ["grammar","essay",
+     "writing"],
 
     "History":
-    ["war","empire","history"],
+    ["war","empire",
+     "history"],
 
     "Geography":
-    ["earth","climate","map"],
+    ["earth","climate",
+     "map"],
 
     "Economics":
-    ["market","demand","supply"],
+    ["market","demand",
+     "supply"],
 
     "Social Science":
-    ["government","society"]
+    ["government",
+     "society"]
 
     }
 
 
-    score={}
+    scores = {}
 
-    for s,words in data.items():
+    for subject,words in data.items():
 
-        score[s]=sum(
+        scores[subject] = sum(
             word in q for word in words
         )
 
 
-    best=max(score,key=score.get)
+    best = max(
+        scores,
+        key=scores.get
+    )
 
-    return best if score[best] else "General"
+
+    if scores[best] == 0:
+        return "General"
+
+
+    return best
 
 
 
@@ -280,7 +299,7 @@ def detect_subject(q):
 # AI
 # =====================
 
-def prompt_builder(
+def build_prompt(
     question,
     subject,
     depth,
@@ -301,11 +320,14 @@ Mode:
 {mode}
 
 Rules:
-- Teach clearly
-- Explain concepts
-- Adjust to learner
-- Use examples
-- Don't just give answers
+- Answer the question directly first.
+- Do not ask "can you confirm?"
+- Do not ask for unnecessary validation.
+- Match length to difficulty.
+- Simple calculations need short answers.
+- Teach step by step for learning questions.
+- Use examples only when useful.
+- Be accurate.
 
 Question:
 {question}
@@ -318,25 +340,25 @@ def ask_ai(prompt):
 
     try:
 
-        r=client.chat.completions.create(
+        response = client.chat.completions.create(
 
-        model="llama-3.3-70b-versatile",
+            model="llama-3.3-70b-versatile",
 
-        messages=[
-            {
-            "role":"user",
-            "content":prompt
-            }
-        ],
+            messages=[
+                {
+                "role":"user",
+                "content":prompt
+                }
+            ],
 
-        temperature=0.4
+            temperature=0.3
         )
 
 
-        return r.choices[0].message.content
+        return response.choices[0].message.content
 
 
-    except:
+    except Exception:
 
         return "AI error. Check Groq settings."
 
@@ -353,7 +375,7 @@ with st.sidebar:
 
     if st.button("➕ New Chat"):
 
-        st.session_state.chat_id=create_chat()
+        st.session_state.chat_id = create_chat()
 
         st.rerun()
 
@@ -372,7 +394,7 @@ with st.sidebar:
             key=cid
         ):
 
-            st.session_state.chat_id=cid
+            st.session_state.chat_id = cid
 
             st.rerun()
 
@@ -381,24 +403,24 @@ with st.sidebar:
     st.divider()
 
 
-    depth=st.selectbox(
+    depth = st.selectbox(
         "Learning Depth",
         [
-            "Quick",
-            "Balanced",
-            "Deep Dive",
-            "Expert"
+        "Quick",
+        "Balanced",
+        "Deep Dive",
+        "Expert"
         ]
     )
 
 
-    mode=st.selectbox(
+    mode = st.selectbox(
         "Mode",
         [
-            "Normal",
-            "Exam Prep",
-            "Hint Mode",
-            "Concept Builder"
+        "Normal",
+        "Exam Prep",
+        "Hint Mode",
+        "Concept Builder"
         ]
     )
 
@@ -409,7 +431,7 @@ with st.sidebar:
             st.session_state.chat_id
         )
 
-        st.session_state.chat_id=create_chat()
+        st.session_state.chat_id = create_chat()
 
         st.rerun()
 
@@ -434,7 +456,11 @@ for role,msg in get_messages(
     st.session_state.chat_id
 ):
 
-    box="user-box" if role=="user" else "ai-box"
+    box = (
+        "user-box"
+        if role=="user"
+        else "ai-box"
+    )
 
     st.markdown(
         f"""
@@ -447,7 +473,7 @@ for role,msg in get_messages(
 
 
 
-question=st.chat_input(
+question = st.chat_input(
     "Ask anything..."
 )
 
@@ -472,13 +498,13 @@ if question:
     )
 
 
-    subject=detect_subject(question)
+    subject = detect_subject(question)
 
 
     with st.spinner("Thinking..."):
 
-        answer=ask_ai(
-            prompt_builder(
+        answer = ask_ai(
+            build_prompt(
                 question,
                 subject,
                 depth,
@@ -501,17 +527,4 @@ if question:
         st.session_state.chat_id,
         "assistant",
         answer
-    )
-
-
-    c1,c2=st.columns(2)
-
-
-    with c1:
-        if st.button("👍 Helpful"):
-            save_feedback(answer,"positive")
-
-
-    with c2:
-        if st.button("👎 Improve"):
-            save_feedback(answer,"negative")
+        )
