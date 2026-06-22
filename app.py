@@ -1,335 +1,196 @@
 import streamlit as st
+import sqlite3
 from groq import Groq
-import os
+import datetime
 
+# =========================
+# CONFIG
+# =========================
 
-# ---------- PAGE ----------
-st.set_page_config(
-    page_title="StudyForge",
-    page_icon="⚒️",
-    layout="wide",
-    initial_sidebar_state="expanded"
+st.set_page_config(page_title="StudyForge AI", layout="wide")
+
+client = Groq(api_key="YOUR_GROQ_API_KEY")
+
+# =========================
+# DATABASE
+# =========================
+
+conn = sqlite3.connect("studyforge.db", check_same_thread=False)
+c = conn.cursor()
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS chat_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    role TEXT,
+    message TEXT,
+    timestamp TEXT
 )
+""")
 
-
-# ---------- UI STYLE ----------
-st.markdown("""
-<style>
-
-.block-container {
-    padding-top: 1.5rem;
-}
-
-
-/* Hide default chat avatars */
-[data-testid="stChatMessageAvatar"] {
-    display: none;
-}
-
-
-/* Chat cards */
-.user-card {
-    background: #2b2b2b;
-    color: white;
-    padding: 14px;
-    border-radius: 18px;
-    margin-left: 25%;
-    margin-bottom: 10px;
-}
-
-
-.ai-card {
-    background: #161616;
-    color: #f5f5f5;
-    padding: 14px;
-    border-radius: 18px;
-    margin-right: 25%;
-    margin-bottom: 10px;
-    border: 1px solid #333;
-}
-
-
-.stButton button {
-    border-radius: 12px;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-
-
-# ---------- CLIENT ----------
-client = Groq(
-    api_key=os.getenv("GROQ_API_KEY")
+c.execute("""
+CREATE TABLE IF NOT EXISTS feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message TEXT,
+    feedback TEXT,
+    timestamp TEXT
 )
+""")
 
+conn.commit()
 
+# =========================
+# UTILS
+# =========================
 
-# ---------- MEMORY ----------
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-
-
-# ---------- SIDEBAR ----------
-with st.sidebar:
-
-    st.title("⚒️ StudyForge")
-
-    st.caption(
-        "Your AI learning workspace"
+def save_chat(role, message):
+    c.execute(
+        "INSERT INTO chat_history (role, message, timestamp) VALUES (?, ?, ?)",
+        (role, message, str(datetime.datetime.now()))
     )
+    conn.commit()
 
+def load_chat():
+    c.execute("SELECT role, message FROM chat_history")
+    return c.fetchall()
 
-    if st.button("◀ Collapse Sidebar"):
-
-        st.markdown(
-            """
-            <script>
-            window.parent.document
-            .querySelector('[data-testid="stSidebarCollapseButton"]')
-            .click();
-            </script>
-            """,
-            unsafe_allow_html=True
-        )
-
-
-    st.divider()
-
-
-    subject = st.selectbox(
-        "Subject",
-        [
-            "Math",
-            "Physics"
-        ]
+def save_feedback(message, fb):
+    c.execute(
+        "INSERT INTO feedback (message, feedback, timestamp) VALUES (?, ?, ?)",
+        (message, fb, str(datetime.datetime.now()))
     )
+    conn.commit()
 
+# =========================
+# SUBJECT DETECTION (SIMPLE)
+# =========================
 
-    depth = st.selectbox(
-        "Learning Depth",
-        [
-            "Basic",
-            "Standard",
-            "Deep Dive"
-        ]
-    )
-
-
-    exam_mode = st.toggle(
-        "Exam Mode"
-    )
-
-
-    hint_mode = st.toggle(
-        "Hint Mode"
-    )
-
-
-    st.divider()
-
-
-    if st.button("Clear Chat"):
-
-        st.session_state.messages = []
-        st.rerun()
-
-
-
-# ---------- HEADER ----------
-st.title("⚒️ StudyForge")
-
-st.caption(
-    "Understand. Practice. Improve."
-)
-
-
-
-# ---------- LATEX ----------
-def show_message(text):
-
-    parts = text.split("$$")
-
-    for i, part in enumerate(parts):
-
-        if i % 2 == 1:
-            st.latex(part)
-
-        else:
-            st.markdown(part)
-
-
-
-# ---------- CHAT HISTORY ----------
-for message in st.session_state.messages:
-
-
-    if message["role"] == "user":
-
-        st.markdown(
-            f"""
-            <div class="user-card">
-            {message["content"]}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-
+def detect_subject(q):
+    q = q.lower()
+    if any(x in q for x in ["x=", "solve", "equation", "math"]):
+        return "Math"
+    elif any(x in q for x in ["force", "energy", "physics", "acceleration"]):
+        return "Physics"
     else:
+        return "General"
 
-        st.markdown(
-            """
-            <div class="ai-card">
-            """,
-            unsafe_allow_html=True
-        )
+# =========================
+# PROMPT ENGINE
+# =========================
 
-        show_message(
-            message["content"]
-        )
+def build_prompt(question, subject, difficulty, mode):
 
-        st.markdown(
-            "</div>",
-            unsafe_allow_html=True
-        )
-
-
-
-# ---------- INPUT ----------
-question = st.chat_input(
-    "Ask a question..."
-)
-
-
-
-# ---------- AI ----------
-if question:
-
-
-    st.markdown(
-        f"""
-        <div class="user-card">
-        {question}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-    st.session_state.messages.append(
-        {
-            "role":"user",
-            "content":question
-        }
-    )
-
-
-    if hint_mode:
-
-        answer_style = """
-Give hints only.
-Do not give final answer.
-"""
-
-    else:
-
-        answer_style = """
-Give full solution.
-"""
-
-
-    if exam_mode:
-
-        format_style = """
-Use:
-
-Given:
-Formula:
-Steps:
-Answer:
-"""
-
-    else:
-
-        format_style = """
-Teach clearly.
-"""
-
-
-
-    prompt = f"""
-
-You are StudyForge, an expert {subject} tutor.
-
-Depth:
-{depth}
+    base = f"""
+You are StudyForge AI Tutor.
 
 Rules:
-- Be accurate.
-- Show equations.
-- Show calculations.
-- Fix mistakes before replying.
-- Use LaTeX with $$ symbols.
+- Subject: {subject}
+- Difficulty: {difficulty}
+- Mode: {mode}
 
-Do not mention internal checking.
-
-{format_style}
-
-{answer_style}
-
+Always:
+- Explain step by step
+- Be clear and structured
+- Use simple language when needed
 """
 
+    if mode == "Exam Mode":
+        base += "\nFormat: Answer like a school exam solution."
 
+    if mode == "Hint Mode":
+        base += "\nGive hints first, not full solution."
 
-    with st.spinner(
-        "Thinking..."
-    ):
+    return base + f"\n\nQuestion: {question}"
 
-        response = client.chat.completions.create(
+# =========================
+# AI CALL
+# =========================
 
-            model="llama-3.1-8b-instant",
+def get_ai_response(prompt):
+    response = client.chat.completions.create(
+        model="llama3-70b-8192",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.5
+    )
+    return response.choices[0].message.content
 
-            messages=[
+# =========================
+# SIDEBAR
+# =========================
 
-                {
-                    "role":"system",
-                    "content":prompt
-                },
+st.sidebar.title("⚒️ StudyForge Controls")
 
-                {
-                    "role":"user",
-                    "content":question
-                }
+difficulty = st.sidebar.selectbox(
+    "Difficulty",
+    ["Easy", "Normal", "Advanced"]
+)
 
-            ]
+mode = st.sidebar.selectbox(
+    "Mode",
+    ["Normal Mode", "Exam Mode", "Hint Mode"]
+)
 
-        )
+st.sidebar.markdown("---")
 
+if st.sidebar.button("🧹 Clear Chat"):
+    c.execute("DELETE FROM chat_history")
+    conn.commit()
+    st.rerun()
 
-        answer = response.choices[0].message.content
+# =========================
+# MAIN UI
+# =========================
 
+st.title("⚒️ StudyForge AI (V1.5)")
+st.caption("Your adaptive AI learning tutor")
 
+# Load chat
+chat = load_chat()
 
-    st.markdown(
-        """
-        <div class="ai-card">
-        """,
-        unsafe_allow_html=True
+# Display chat history FIRST (FIXED ISSUE)
+for role, msg in chat:
+    with st.chat_message(role):
+        st.markdown(msg)
+
+# Input
+question = st.chat_input("Ask your question...")
+
+if question:
+
+    subject = detect_subject(question)
+
+    prompt = build_prompt(
+        question,
+        subject,
+        difficulty,
+        mode
     )
 
-    show_message(answer)
+    answer = get_ai_response(prompt)
 
-    st.markdown(
-        "</div>",
-        unsafe_allow_html=True
-    )
+    # Save user message
+    save_chat("user", question)
 
+    # Save AI response
+    save_chat("assistant", answer)
 
-    st.session_state.messages.append(
-        {
-            "role":"assistant",
-            "content":answer
-        }
-    )
+    # Display immediately
+    with st.chat_message("user"):
+        st.markdown(question)
+
+    with st.chat_message("assistant"):
+        st.markdown(answer)
+
+        # =========================
+        # FEEDBACK SYSTEM
+        # =========================
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("👍 Helpful"):
+                save_feedback(answer, "positive")
+                st.success("Feedback saved")
+
+        with col2:
+            if st.button("👎 Not Helpful"):
+                save_feedback(answer, "negative")
+                st.warning("Feedback saved")
