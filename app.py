@@ -1,6 +1,7 @@
 import streamlit as st
 import sqlite3
 from groq import Groq
+import uuid
 
 
 # =====================
@@ -14,47 +15,29 @@ st.set_page_config(
 )
 
 
-# =====================
-# UI CSS
-# =====================
-
 st.markdown("""
 <style>
 
 .user-box {
-    background-color: rgba(70,120,255,0.18);
-    padding: 14px;
-    border-radius: 14px;
-    margin: 10px 0;
-    border: 1px solid rgba(100,100,100,0.25);
+    background: rgba(70,120,255,0.18);
+    padding:14px;
+    border-radius:14px;
+    margin:10px 0;
+    border:1px solid rgba(100,100,100,0.25);
 }
 
 
 .ai-box {
-    background-color: rgba(140,140,140,0.15);
-    padding: 14px;
-    border-radius: 14px;
-    margin: 10px 0;
-    border: 1px solid rgba(100,100,100,0.25);
+    background: rgba(130,130,130,0.18);
+    padding:14px;
+    border-radius:14px;
+    margin:10px 0;
+    border:1px solid rgba(100,100,100,0.25);
 }
 
 
-/* Fix chat input red issue */
 textarea {
-    background-color: transparent !important;
-}
-
-
-.stChatInputContainer {
-    border-color: rgba(120,120,120,0.3) !important;
-}
-
-
-.subject-box {
-    padding: 10px;
-    border-radius: 12px;
-    background-color: rgba(120,120,120,0.12);
-    margin-bottom:10px;
+    background: transparent !important;
 }
 
 </style>
@@ -67,11 +50,7 @@ textarea {
 # =====================
 
 if "GROQ_API_KEY" not in st.secrets:
-
-    st.error(
-        "Missing GROQ_API_KEY in Streamlit Secrets"
-    )
-
+    st.error("Add GROQ_API_KEY in Streamlit Secrets")
     st.stop()
 
 
@@ -94,19 +73,28 @@ cursor = db.cursor()
 
 
 cursor.execute("""
+CREATE TABLE IF NOT EXISTS chats(
+    id TEXT PRIMARY KEY,
+    title TEXT
+)
+""")
+
+
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS messages(
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-role TEXT,
-content TEXT
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id TEXT,
+    role TEXT,
+    content TEXT
 )
 """)
 
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS feedback(
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-response TEXT,
-rating TEXT
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    response TEXT,
+    rating TEXT
 )
 """)
 
@@ -114,31 +102,84 @@ db.commit()
 
 
 
-def save_message(role, content):
+def create_chat():
+
+    chat_id = str(uuid.uuid4())
 
     cursor.execute(
-        "INSERT INTO messages(role,content) VALUES (?,?)",
-        (role,content)
+        "INSERT INTO chats VALUES (?,?)",
+        (chat_id,"New Chat")
     )
 
     db.commit()
 
+    return chat_id
 
 
-def get_messages():
+
+def get_chats():
 
     cursor.execute(
-        "SELECT role,content FROM messages ORDER BY id"
+        "SELECT * FROM chats"
     )
 
     return cursor.fetchall()
 
 
 
-def save_feedback(text, rating):
+def save_message(chat,role,text):
 
     cursor.execute(
-        "INSERT INTO feedback(response,rating) VALUES (?,?)",
+        """
+        INSERT INTO messages(chat_id,role,content)
+        VALUES(?,?,?)
+        """,
+        (chat,role,text)
+    )
+
+    db.commit()
+
+
+
+def get_messages(chat):
+
+    cursor.execute(
+        """
+        SELECT role,content
+        FROM messages
+        WHERE chat_id=?
+        ORDER BY id
+        """,
+        (chat,)
+    )
+
+    return cursor.fetchall()
+
+
+
+def delete_chat(chat):
+
+    cursor.execute(
+        "DELETE FROM chats WHERE id=?",
+        (chat,)
+    )
+
+    cursor.execute(
+        "DELETE FROM messages WHERE chat_id=?",
+        (chat,)
+    )
+
+    db.commit()
+
+
+
+def save_feedback(text,rating):
+
+    cursor.execute(
+        """
+        INSERT INTO feedback(response,rating)
+        VALUES(?,?)
+        """,
         (text,rating)
     )
 
@@ -147,7 +188,23 @@ def save_feedback(text, rating):
 
 
 # =====================
-# SUBJECTS
+# SESSION CHAT
+# =====================
+
+if "chat_id" not in st.session_state:
+
+    chats = get_chats()
+
+    if chats:
+        st.session_state.chat_id = chats[0][0]
+
+    else:
+        st.session_state.chat_id = create_chat()
+
+
+
+# =====================
+# SUBJECT SYSTEM
 # =====================
 
 SUBJECTS = [
@@ -165,78 +222,57 @@ SUBJECTS = [
 ]
 
 
-def detect_subject(question):
+def detect_subject(q):
 
-    q = question.lower()
+    q=q.lower()
 
+    data={
 
-    keywords = {
+    "Mathematics":
+    ["math","equation","algebra","calculus"],
 
-        "Mathematics":
-        ["math","equation","algebra","calculus","geometry",
-         "trigonometry","integral","probability"],
+    "Physics":
+    ["force","energy","motion","velocity"],
 
+    "Chemistry":
+    ["atom","reaction","chemical"],
 
-        "Physics":
-        ["force","energy","motion","velocity",
-         "acceleration","wave","electric"],
+    "Biology":
+    ["cell","dna","biology"],
 
+    "Computer Science":
+    ["code","python","algorithm"],
 
-        "Chemistry":
-        ["atom","molecule","reaction",
-         "chemical","bond","acid"],
+    "English":
+    ["grammar","essay","writing"],
 
+    "History":
+    ["war","empire","history"],
 
-        "Biology":
-        ["cell","dna","gene","biology",
-         "plant","body"],
+    "Geography":
+    ["earth","climate","map"],
 
+    "Economics":
+    ["market","demand","supply"],
 
-        "Computer Science":
-        ["code","python","algorithm",
-         "program","database"],
-
-
-        "English":
-        ["grammar","essay","writing",
-         "literature"],
-
-
-        "History":
-        ["war","empire","revolution"],
-
-
-        "Geography":
-        ["earth","map","climate"],
-
-
-        "Economics":
-        ["market","demand","supply"],
-
-
-        "Social Science":
-        ["government","society","civics"]
+    "Social Science":
+    ["government","society"]
 
     }
 
 
-    scores = {}
+    score={}
 
-    for subject, words in keywords.items():
+    for s,words in data.items():
 
-        scores[subject] = sum(
-            1 for word in words if word in q
+        score[s]=sum(
+            word in q for word in words
         )
 
 
-    best = max(scores, key=scores.get)
+    best=max(score,key=score.get)
 
-
-    if scores[best] == 0:
-        return "General"
-
-
-    return best
+    return best if score[best] else "General"
 
 
 
@@ -244,10 +280,10 @@ def detect_subject(question):
 # AI
 # =====================
 
-def create_prompt(
+def prompt_builder(
     question,
     subject,
-    difficulty,
+    depth,
     mode
 ):
 
@@ -255,17 +291,21 @@ def create_prompt(
 
 You are StudyForge AI Tutor.
 
-Subject: {subject}
+Subject:
+{subject}
 
-Difficulty: {difficulty}
+Learning depth:
+{depth}
 
-Mode: {mode}
+Mode:
+{mode}
 
 Rules:
-- Teach step by step
+- Teach clearly
 - Explain concepts
-- Adjust difficulty
-- Be accurate
+- Adjust to learner
+- Use examples
+- Don't just give answers
 
 Question:
 {question}
@@ -278,26 +318,27 @@ def ask_ai(prompt):
 
     try:
 
-        result = client.chat.completions.create(
+        r=client.chat.completions.create(
 
-            model="llama-3.3-70b-versatile",
+        model="llama-3.3-70b-versatile",
 
-            messages=[
-                {
-                    "role":"user",
-                    "content":prompt
-                }
-            ],
+        messages=[
+            {
+            "role":"user",
+            "content":prompt
+            }
+        ],
 
-            temperature=0.4
+        temperature=0.4
         )
 
-        return result.choices[0].message.content
+
+        return r.choices[0].message.content
 
 
-    except Exception:
+    except:
 
-        return "AI failed. Check Groq settings."
+        return "AI error. Check Groq settings."
 
 
 
@@ -310,25 +351,65 @@ with st.sidebar:
     st.title("⚒️ StudyForge")
 
 
-    difficulty = st.selectbox(
-        "Difficulty",
-        ["Easy","Normal","Advanced"]
+    if st.button("➕ New Chat"):
+
+        st.session_state.chat_id=create_chat()
+
+        st.rerun()
+
+
+
+    st.divider()
+
+
+    st.subheader("Chats")
+
+
+    for cid,title in get_chats():
+
+        if st.button(
+            title,
+            key=cid
+        ):
+
+            st.session_state.chat_id=cid
+
+            st.rerun()
+
+
+
+    st.divider()
+
+
+    depth=st.selectbox(
+        "Learning Depth",
+        [
+            "Quick",
+            "Balanced",
+            "Deep Dive",
+            "Expert"
+        ]
     )
 
 
-    mode = st.selectbox(
+    mode=st.selectbox(
         "Mode",
-        ["Normal","Exam","Hint"]
+        [
+            "Normal",
+            "Exam Prep",
+            "Hint Mode",
+            "Concept Builder"
+        ]
     )
 
 
-    if st.button("Clear Chat"):
+    if st.button("Delete Current Chat"):
 
-        cursor.execute(
-            "DELETE FROM messages"
+        delete_chat(
+            st.session_state.chat_id
         )
 
-        db.commit()
+        st.session_state.chat_id=create_chat()
 
         st.rerun()
 
@@ -340,27 +421,25 @@ with st.sidebar:
 
 st.title("⚒️ StudyForge AI")
 
-st.caption(
-    "Adaptive AI learning assistant"
-)
-
 
 st.subheader("Available Subjects")
 
-st.markdown(
+st.write(
     " • ".join(SUBJECTS)
 )
 
 
 
-for role, message in get_messages():
+for role,msg in get_messages(
+    st.session_state.chat_id
+):
 
-    box = "user-box" if role=="user" else "ai-box"
+    box="user-box" if role=="user" else "ai-box"
 
     st.markdown(
         f"""
         <div class="{box}">
-        {message}
+        {msg}
         </div>
         """,
         unsafe_allow_html=True
@@ -368,8 +447,8 @@ for role, message in get_messages():
 
 
 
-question = st.chat_input(
-    "Ask your question..."
+question=st.chat_input(
+    "Ask anything..."
 )
 
 
@@ -377,6 +456,7 @@ question = st.chat_input(
 if question:
 
     save_message(
+        st.session_state.chat_id,
         "user",
         question
     )
@@ -392,16 +472,16 @@ if question:
     )
 
 
-    subject = detect_subject(question)
+    subject=detect_subject(question)
 
 
     with st.spinner("Thinking..."):
 
-        answer = ask_ai(
-            create_prompt(
+        answer=ask_ai(
+            prompt_builder(
                 question,
                 subject,
-                difficulty,
+                depth,
                 mode
             )
         )
@@ -418,25 +498,20 @@ if question:
 
 
     save_message(
+        st.session_state.chat_id,
         "assistant",
         answer
     )
 
 
-    c1,c2 = st.columns(2)
+    c1,c2=st.columns(2)
 
 
     with c1:
-
         if st.button("👍 Helpful"):
-
             save_feedback(answer,"positive")
-            st.success("Saved")
 
 
     with c2:
-
         if st.button("👎 Improve"):
-
             save_feedback(answer,"negative")
-            st.warning("Saved")
