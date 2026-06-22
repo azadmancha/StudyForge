@@ -3,9 +3,9 @@ import sqlite3
 from groq import Groq
 
 
-# -----------------------
-# APP CONFIG
-# -----------------------
+# =====================
+# CONFIG
+# =====================
 
 st.set_page_config(
     page_title="StudyForge AI",
@@ -14,21 +14,47 @@ st.set_page_config(
 )
 
 
+# =====================
+# UI CSS
+# =====================
+
 st.markdown("""
 <style>
 
 .user-box {
-    background:#dbeafe;
-    padding:14px;
-    border-radius:16px;
-    margin:12px 0;
+    background-color: rgba(70,120,255,0.18);
+    padding: 14px;
+    border-radius: 14px;
+    margin: 10px 0;
+    border: 1px solid rgba(100,100,100,0.25);
 }
 
+
 .ai-box {
-    background:#f3f4f6;
-    padding:14px;
-    border-radius:16px;
-    margin:12px 0;
+    background-color: rgba(140,140,140,0.15);
+    padding: 14px;
+    border-radius: 14px;
+    margin: 10px 0;
+    border: 1px solid rgba(100,100,100,0.25);
+}
+
+
+/* Fix chat input red issue */
+textarea {
+    background-color: transparent !important;
+}
+
+
+.stChatInputContainer {
+    border-color: rgba(120,120,120,0.3) !important;
+}
+
+
+.subject-box {
+    padding: 10px;
+    border-radius: 12px;
+    background-color: rgba(120,120,120,0.12);
+    margin-bottom:10px;
 }
 
 </style>
@@ -36,9 +62,9 @@ st.markdown("""
 
 
 
-# -----------------------
-# GROQ SETUP
-# -----------------------
+# =====================
+# GROQ
+# =====================
 
 if "GROQ_API_KEY" not in st.secrets:
 
@@ -55,9 +81,9 @@ client = Groq(
 
 
 
-# -----------------------
+# =====================
 # DATABASE
-# -----------------------
+# =====================
 
 db = sqlite3.connect(
     "studyforge.db",
@@ -69,21 +95,20 @@ cursor = db.cursor()
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS messages(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    role TEXT NOT NULL,
-    content TEXT NOT NULL
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+role TEXT,
+content TEXT
 )
 """)
 
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS feedback(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    response TEXT,
-    rating TEXT
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+response TEXT,
+rating TEXT
 )
 """)
-
 
 db.commit()
 
@@ -92,11 +117,8 @@ db.commit()
 def save_message(role, content):
 
     cursor.execute(
-        """
-        INSERT INTO messages(role,content)
-        VALUES (?,?)
-        """,
-        (role, content)
+        "INSERT INTO messages(role,content) VALUES (?,?)",
+        (role,content)
     )
 
     db.commit()
@@ -106,127 +128,108 @@ def save_message(role, content):
 def get_messages():
 
     cursor.execute(
-        """
-        SELECT role,content
-        FROM messages
-        ORDER BY id
-        """
+        "SELECT role,content FROM messages ORDER BY id"
     )
 
     return cursor.fetchall()
 
 
 
-def save_feedback(response, rating):
+def save_feedback(text, rating):
 
     cursor.execute(
-        """
-        INSERT INTO feedback(response,rating)
-        VALUES (?,?)
-        """,
-        (response, rating)
+        "INSERT INTO feedback(response,rating) VALUES (?,?)",
+        (text,rating)
     )
 
     db.commit()
 
 
 
-# -----------------------
-# SUBJECT DETECTION
-# -----------------------
+# =====================
+# SUBJECTS
+# =====================
+
+SUBJECTS = [
+    "Mathematics",
+    "Physics",
+    "Chemistry",
+    "Biology",
+    "Computer Science",
+    "English",
+    "History",
+    "Geography",
+    "Economics",
+    "Social Science",
+    "General"
+]
+
 
 def detect_subject(question):
 
     q = question.lower()
 
 
-    subject_keywords = {
+    keywords = {
 
-        "Mathematics": [
-            "math","equation","algebra",
-            "calculus","geometry",
-            "trigonometry","integral",
-            "derivative","probability",
-            "statistics"
-        ],
+        "Mathematics":
+        ["math","equation","algebra","calculus","geometry",
+         "trigonometry","integral","probability"],
 
-        "Physics": [
-            "force","motion",
-            "velocity","acceleration",
-            "energy","wave",
-            "electricity","physics"
-        ],
 
-        "Chemistry": [
-            "atom","molecule",
-            "reaction","chemical",
-            "bond","acid",
-            "periodic table"
-        ],
+        "Physics":
+        ["force","energy","motion","velocity",
+         "acceleration","wave","electric"],
 
-        "Biology": [
-            "cell","dna",
-            "gene","organ",
-            "plant","biology"
-        ],
 
-        "Computer Science": [
-            "python","code",
-            "program","algorithm",
-            "database","computer"
-        ],
+        "Chemistry":
+        ["atom","molecule","reaction",
+         "chemical","bond","acid"],
 
-        "English": [
-            "grammar",
-            "essay",
-            "writing",
-            "literature"
-        ],
 
-        "History": [
-            "war",
-            "empire",
-            "revolution",
-            "history"
-        ],
+        "Biology":
+        ["cell","dna","gene","biology",
+         "plant","body"],
 
-        "Geography": [
-            "climate",
-            "earth",
-            "map",
-            "geography"
-        ],
 
-        "Economics": [
-            "market",
-            "demand",
-            "supply",
-            "economy"
-        ],
+        "Computer Science":
+        ["code","python","algorithm",
+         "program","database"],
 
-        "Social Science": [
-            "government",
-            "society",
-            "civics"
-        ]
+
+        "English":
+        ["grammar","essay","writing",
+         "literature"],
+
+
+        "History":
+        ["war","empire","revolution"],
+
+
+        "Geography":
+        ["earth","map","climate"],
+
+
+        "Economics":
+        ["market","demand","supply"],
+
+
+        "Social Science":
+        ["government","society","civics"]
 
     }
 
 
     scores = {}
 
-
-    for subject, words in subject_keywords.items():
+    for subject, words in keywords.items():
 
         scores[subject] = sum(
             1 for word in words if word in q
         )
 
 
-    best = max(
-        scores,
-        key=scores.get
-    )
+    best = max(scores, key=scores.get)
 
 
     if scores[best] == 0:
@@ -237,9 +240,9 @@ def detect_subject(question):
 
 
 
-# -----------------------
-# PROMPT SYSTEM
-# -----------------------
+# =====================
+# AI
+# =====================
 
 def create_prompt(
     question,
@@ -247,15 +250,6 @@ def create_prompt(
     difficulty,
     mode
 ):
-
-    extra = ""
-
-    if mode == "Exam":
-        extra = "Answer in exam style with proper steps."
-
-    elif mode == "Hint":
-        extra = "Give hints first and avoid revealing full solution immediately."
-
 
     return f"""
 
@@ -265,14 +259,13 @@ Subject: {subject}
 
 Difficulty: {difficulty}
 
-{extra}
+Mode: {mode}
 
 Rules:
-- Teach clearly
-- Explain step by step
+- Teach step by step
+- Explain concepts
+- Adjust difficulty
 - Be accurate
-- Adjust explanation level
-- Do not skip reasoning
 
 Question:
 {question}
@@ -281,15 +274,11 @@ Question:
 
 
 
-# -----------------------
-# AI RESPONSE
-# -----------------------
-
 def ask_ai(prompt):
 
     try:
 
-        response = client.chat.completions.create(
+        result = client.chat.completions.create(
 
             model="llama-3.3-70b-versatile",
 
@@ -303,21 +292,18 @@ def ask_ai(prompt):
             temperature=0.4
         )
 
-        return response.choices[0].message.content
+        return result.choices[0].message.content
 
 
-    except Exception as e:
+    except Exception:
 
-        return (
-            "AI error occurred. "
-            "Please check your Groq key/model settings."
-        )
+        return "AI failed. Check Groq settings."
 
 
 
-# -----------------------
+# =====================
 # SIDEBAR
-# -----------------------
+# =====================
 
 with st.sidebar:
 
@@ -326,21 +312,13 @@ with st.sidebar:
 
     difficulty = st.selectbox(
         "Difficulty",
-        [
-            "Easy",
-            "Normal",
-            "Advanced"
-        ]
+        ["Easy","Normal","Advanced"]
     )
 
 
     mode = st.selectbox(
         "Mode",
-        [
-            "Normal",
-            "Exam",
-            "Hint"
-        ]
+        ["Normal","Exam","Hint"]
     )
 
 
@@ -356,9 +334,9 @@ with st.sidebar:
 
 
 
-# -----------------------
+# =====================
 # MAIN
-# -----------------------
+# =====================
 
 st.title("⚒️ StudyForge AI")
 
@@ -367,18 +345,21 @@ st.caption(
 )
 
 
+st.subheader("Available Subjects")
+
+st.markdown(
+    " • ".join(SUBJECTS)
+)
+
+
 
 for role, message in get_messages():
 
-    css = (
-        "user-box"
-        if role == "user"
-        else "ai-box"
-    )
+    box = "user-box" if role=="user" else "ai-box"
 
     st.markdown(
         f"""
-        <div class="{css}">
+        <div class="{box}">
         {message}
         </div>
         """,
@@ -414,14 +395,16 @@ if question:
     subject = detect_subject(question)
 
 
-    answer = ask_ai(
-        create_prompt(
-            question,
-            subject,
-            difficulty,
-            mode
+    with st.spinner("Thinking..."):
+
+        answer = ask_ai(
+            create_prompt(
+                question,
+                subject,
+                difficulty,
+                mode
+            )
         )
-    )
 
 
     st.markdown(
@@ -440,34 +423,20 @@ if question:
     )
 
 
-    col1, col2 = st.columns(2)
+    c1,c2 = st.columns(2)
 
 
-    with col1:
+    with c1:
 
-        if st.button(
-            "👍 Helpful",
-            key="helpful_" + question[:10]
-        ):
+        if st.button("👍 Helpful"):
 
-            save_feedback(
-                answer,
-                "positive"
-            )
-
+            save_feedback(answer,"positive")
             st.success("Saved")
 
 
-    with col2:
+    with c2:
 
-        if st.button(
-            "👎 Improve",
-            key="improve_" + question[:10]
-        ):
+        if st.button("👎 Improve"):
 
-            save_feedback(
-                answer,
-                "negative"
-            )
-
+            save_feedback(answer,"negative")
             st.warning("Saved")
