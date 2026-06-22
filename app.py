@@ -42,6 +42,7 @@ if "messages" not in st.session_state:
 with st.sidebar:
 
     st.title("⚒️ StudyForge")
+
     st.caption("Your AI-powered learning workspace")
 
     subject = st.selectbox(
@@ -58,56 +59,13 @@ with st.sidebar:
         ]
     )
 
-    exam_mode = st.toggle("📝 Exam Mode")
+    exam_mode = st.toggle(
+        "📝 Exam Mode"
+    )
 
-    hint_mode = st.toggle("💡 Hint Mode")
-
-
-    st.divider()
-
-    st.subheader("📘 Formula Bank")
-
-    if subject == "Math":
-
-        st.markdown("""
-**Algebra**
-- Quadratic formula
-- Factorisation
-
-**Geometry**
-- Area
-- Volume
-- Pythagoras
-
-**Trigonometry**
-- sin, cos, tan
-- Identities
-
-**Calculus**
-- Derivatives
-- Integration
-""")
-
-    else:
-
-        st.markdown("""
-**Mechanics**
-- v=u+at
-- F=ma
-- Work Energy
-
-**Waves**
-- v=fλ
-
-**Electricity**
-- V=IR
-- P=VI
-
-**Optics**
-- Lens formula
-- Mirror formula
-""")
-
+    hint_mode = st.toggle(
+        "💡 Hint Mode"
+    )
 
     st.divider()
 
@@ -123,7 +81,7 @@ st.caption("Understand. Practice. Improve.")
 
 
 
-# ---------- CHAT HISTORY ----------
+# ---------- DISPLAY OLD CHAT ----------
 for message in st.session_state.messages:
 
     with st.chat_message(message["role"]):
@@ -131,16 +89,22 @@ for message in st.session_state.messages:
 
 
 
-# ---------- INPUT ----------
+# ---------- USER INPUT ----------
 question = st.chat_input(
     "Ask a Math or Physics question..."
 )
 
 
 
-# ---------- AI ----------
+# ---------- RESPONSE ----------
 if question:
 
+    # Show user question immediately
+    with st.chat_message("user"):
+        st.markdown(question)
+
+
+    # Save user message
     st.session_state.messages.append(
         {
             "role": "user",
@@ -152,11 +116,11 @@ if question:
     if hint_mode:
         answer_style = """
 Give hints only.
-Do not give final answer unless requested.
+Do not reveal the final answer unless requested.
 """
     else:
         answer_style = """
-Give full solution.
+Give the complete solution.
 """
 
 
@@ -166,7 +130,6 @@ Use exam format:
 
 Given:
 Formula:
-Substitution:
 Working:
 Final Answer:
 """
@@ -182,40 +145,38 @@ You are StudyForge, an expert {subject} tutor.
 Learning depth:
 {depth}
 
-Accuracy rules:
+Rules:
+- Give accurate answers.
 - Solve carefully.
-- Do not guess.
 - For numerical problems:
-  - Write the equation first.
-  - Substitute values clearly.
+  - Write equations.
+  - Substitute values.
   - Show calculations.
-  - Recalculate the final value.
-- Be careful with percentages and units.
+- Be careful with percentages, units, and algebra.
 - Fix mistakes before responding.
 
-Do NOT mention:
+Do not mention:
 - checking
 - verification
 - internal reasoning
-- corrections
 
 Math:
-- Use LaTeX formatting for equations.
+Use LaTeX formatting for equations.
 
 Physics:
-- Include formulas and units.
+Include formulas and units.
 
 {format_style}
 
 {answer_style}
 
-Make the answer clear and student-friendly.
+Make answers clear and student-friendly.
 """
 
 
     with st.chat_message("assistant"):
 
-        with st.spinner("Forging answer... ⚒️"):
+        with st.spinner("Thinking... ⚒️"):
 
             response = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
@@ -231,14 +192,16 @@ Make the answer clear and student-friendly.
                 ]
             )
 
+
             answer = response.choices[0].message.content
 
             st.markdown(answer)
 
 
+    # Save AI response
     st.session_state.messages.append(
         {
             "role": "assistant",
             "content": answer
         }
-    )
+            )
