@@ -58,28 +58,21 @@ with st.sidebar:
         ]
     )
 
+    exam_mode = st.toggle("📝 Exam Mode")
 
-    exam_mode = st.toggle(
-        "📝 Exam Mode"
-    )
-
-
-    hint_mode = st.toggle(
-        "💡 Hint Mode"
-    )
+    hint_mode = st.toggle("💡 Hint Mode")
 
 
     st.divider()
-
 
     st.subheader("📘 Formula Bank")
 
     if subject == "Math":
 
-        st.write("""
+        st.markdown("""
 **Algebra**
-- (a+b)² = a²+2ab+b²
 - Quadratic formula
+- Factorisation
 
 **Geometry**
 - Area
@@ -88,17 +81,16 @@ with st.sidebar:
 
 **Trigonometry**
 - sin, cos, tan
-- identities
+- Identities
 
 **Calculus**
 - Derivatives
-- Integration basics
+- Integration
 """)
-
 
     else:
 
-        st.write("""
+        st.markdown("""
 **Mechanics**
 - v=u+at
 - F=ma
@@ -119,7 +111,6 @@ with st.sidebar:
 
     st.divider()
 
-
     if st.button("🗑️ Clear Chat"):
         st.session_state.messages = []
         st.rerun()
@@ -128,13 +119,11 @@ with st.sidebar:
 
 # ---------- HEADER ----------
 st.title("⚒️ StudyForge")
-
-st.caption(
-    "Understand. Practice. Improve."
-)
+st.caption("Understand. Practice. Improve.")
 
 
-# ---------- CHAT ----------
+
+# ---------- CHAT HISTORY ----------
 for message in st.session_state.messages:
 
     with st.chat_message(message["role"]):
@@ -161,27 +150,29 @@ if question:
 
 
     if hint_mode:
-        output_style = """
+        answer_style = """
 Give hints only.
-Do not give the final answer unless the user asks.
+Do not give final answer unless requested.
 """
     else:
-        output_style = """
-Give a complete solution.
+        answer_style = """
+Give full solution.
 """
 
 
     if exam_mode:
-        exam_style = """
+        format_style = """
 Use exam format:
+
 Given:
 Formula:
+Substitution:
 Working:
-Answer:
+Final Answer:
 """
     else:
-        exam_style = """
-Explain like a tutor.
+        format_style = """
+Explain like a personal tutor.
 """
 
 
@@ -191,23 +182,34 @@ You are StudyForge, an expert {subject} tutor.
 Learning depth:
 {depth}
 
-Rules:
-- Give accurate answers.
-- Check calculations internally before replying.
-- Fix mistakes before answering.
-- Do not mention checking or internal reasoning.
+Accuracy rules:
+- Solve carefully.
+- Do not guess.
+- For numerical problems:
+  - Write the equation first.
+  - Substitute values clearly.
+  - Show calculations.
+  - Recalculate the final value.
+- Be careful with percentages and units.
+- Fix mistakes before responding.
+
+Do NOT mention:
+- checking
+- verification
+- internal reasoning
+- corrections
 
 Math:
-- Use LaTeX for equations.
+- Use LaTeX formatting for equations.
 
 Physics:
 - Include formulas and units.
 
-{exam_style}
+{format_style}
 
-{output_style}
+{answer_style}
 
-Be clear and student friendly.
+Make the answer clear and student-friendly.
 """
 
 
@@ -229,9 +231,7 @@ Be clear and student friendly.
                 ]
             )
 
-
             answer = response.choices[0].message.content
-
 
             st.markdown(answer)
 
