@@ -16,18 +16,31 @@ if question:
     with st.spinner("Thinking... ⚒️"):
 
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a helpful tutor. Explain step by step in simple language."
-                },
-                {
-                    "role": "user",
-                    "content": question
-                }
-            ]
-        )
+    model="llama-3.1-8b-instant",
+    messages=[
+        {
+            "role": "system",
+            "content": """
+You are an expert physics and math tutor.
 
-        answer = response.choices[0].message.content
-        st.write(answer)
+You MUST follow this format:
+
+1. Solve the problem step by step.
+2. Give final answer clearly.
+3. Then RE-CHECK your solution:
+   - verify calculations
+   - verify logic
+   - correct mistakes if any
+
+If you find an error, fix it before final output.
+"""
+        },
+        {
+            "role": "user",
+            "content": question
+        }
+    ]
+)
+
+answer = response.choices[0].message.content
+st.write(answer)
