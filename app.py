@@ -18,23 +18,7 @@ if question:
         response = client.chat.completions.create(
     model="llama-3.1-8b-instant",
     messages=[
-        {
-            "role": "system",
-            "content": """
-You are an expert physics and math tutor.
-
-You MUST follow this format:
-
-1. Solve the problem step by step.
-2. Give final answer clearly.
-3. Then RE-CHECK your solution:
-   - verify calculations
-   - verify logic
-   - correct mistakes if any
-
-If you find an error, fix it before final output.
-"""
-        },
+        
         {
             "role": "user",
             "system_prompt = """
