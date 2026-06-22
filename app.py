@@ -3,9 +3,9 @@ import sqlite3
 from groq import Groq
 
 
-# ----------------------
-# Setup
-# ----------------------
+# -----------------------
+# APP CONFIG
+# -----------------------
 
 st.set_page_config(
     page_title="StudyForge AI",
@@ -14,14 +14,50 @@ st.set_page_config(
 )
 
 
+st.markdown("""
+<style>
+
+.user-box {
+    background:#dbeafe;
+    padding:14px;
+    border-radius:16px;
+    margin:12px 0;
+}
+
+.ai-box {
+    background:#f3f4f6;
+    padding:14px;
+    border-radius:16px;
+    margin:12px 0;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+
+# -----------------------
+# GROQ SETUP
+# -----------------------
+
+if "GROQ_API_KEY" not in st.secrets:
+
+    st.error(
+        "Missing GROQ_API_KEY in Streamlit Secrets"
+    )
+
+    st.stop()
+
+
 client = Groq(
     api_key=st.secrets["GROQ_API_KEY"]
 )
 
 
-# ----------------------
-# Database
-# ----------------------
+
+# -----------------------
+# DATABASE
+# -----------------------
 
 db = sqlite3.connect(
     "studyforge.db",
@@ -34,8 +70,8 @@ cursor = db.cursor()
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS messages(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    role TEXT,
-    content TEXT
+    role TEXT NOT NULL,
+    content TEXT NOT NULL
 )
 """)
 
@@ -48,6 +84,7 @@ CREATE TABLE IF NOT EXISTS feedback(
 )
 """)
 
+
 db.commit()
 
 
@@ -55,7 +92,10 @@ db.commit()
 def save_message(role, content):
 
     cursor.execute(
-        "INSERT INTO messages(role,content) VALUES (?,?)",
+        """
+        INSERT INTO messages(role,content)
+        VALUES (?,?)
+        """,
         (role, content)
     )
 
@@ -66,7 +106,11 @@ def save_message(role, content):
 def get_messages():
 
     cursor.execute(
-        "SELECT role,content FROM messages ORDER BY id"
+        """
+        SELECT role,content
+        FROM messages
+        ORDER BY id
+        """
     )
 
     return cursor.fetchall()
@@ -76,7 +120,10 @@ def get_messages():
 def save_feedback(response, rating):
 
     cursor.execute(
-        "INSERT INTO feedback(response,rating) VALUES (?,?)",
+        """
+        INSERT INTO feedback(response,rating)
+        VALUES (?,?)
+        """,
         (response, rating)
     )
 
@@ -84,33 +131,115 @@ def save_feedback(response, rating):
 
 
 
-# ----------------------
-# AI Logic
-# ----------------------
+# -----------------------
+# SUBJECT DETECTION
+# -----------------------
 
-def detect_subject(text):
+def detect_subject(question):
 
-    text = text.lower()
-
-    if any(word in text for word in [
-        "equation",
-        "algebra",
-        "solve",
-        "math"
-    ]):
-        return "Math"
-
-    if any(word in text for word in [
-        "force",
-        "energy",
-        "velocity",
-        "physics"
-    ]):
-        return "Physics"
-
-    return "General"
+    q = question.lower()
 
 
+    subject_keywords = {
+
+        "Mathematics": [
+            "math","equation","algebra",
+            "calculus","geometry",
+            "trigonometry","integral",
+            "derivative","probability",
+            "statistics"
+        ],
+
+        "Physics": [
+            "force","motion",
+            "velocity","acceleration",
+            "energy","wave",
+            "electricity","physics"
+        ],
+
+        "Chemistry": [
+            "atom","molecule",
+            "reaction","chemical",
+            "bond","acid",
+            "periodic table"
+        ],
+
+        "Biology": [
+            "cell","dna",
+            "gene","organ",
+            "plant","biology"
+        ],
+
+        "Computer Science": [
+            "python","code",
+            "program","algorithm",
+            "database","computer"
+        ],
+
+        "English": [
+            "grammar",
+            "essay",
+            "writing",
+            "literature"
+        ],
+
+        "History": [
+            "war",
+            "empire",
+            "revolution",
+            "history"
+        ],
+
+        "Geography": [
+            "climate",
+            "earth",
+            "map",
+            "geography"
+        ],
+
+        "Economics": [
+            "market",
+            "demand",
+            "supply",
+            "economy"
+        ],
+
+        "Social Science": [
+            "government",
+            "society",
+            "civics"
+        ]
+
+    }
+
+
+    scores = {}
+
+
+    for subject, words in subject_keywords.items():
+
+        scores[subject] = sum(
+            1 for word in words if word in q
+        )
+
+
+    best = max(
+        scores,
+        key=scores.get
+    )
+
+
+    if scores[best] == 0:
+        return "General"
+
+
+    return best
+
+
+
+# -----------------------
+# PROMPT SYSTEM
+# -----------------------
 
 def create_prompt(
     question,
@@ -119,52 +248,81 @@ def create_prompt(
     mode
 ):
 
+    extra = ""
+
+    if mode == "Exam":
+        extra = "Answer in exam style with proper steps."
+
+    elif mode == "Hint":
+        extra = "Give hints first and avoid revealing full solution immediately."
+
+
     return f"""
+
 You are StudyForge AI Tutor.
 
 Subject: {subject}
-Difficulty: {difficulty}
-Mode: {mode}
 
-Instructions:
+Difficulty: {difficulty}
+
+{extra}
+
+Rules:
 - Teach clearly
 - Explain step by step
-- Do not just give answers
-- Adapt to the student's level
+- Be accurate
+- Adjust explanation level
+- Do not skip reasoning
 
 Question:
 {question}
+
 """
 
 
 
+# -----------------------
+# AI RESPONSE
+# -----------------------
+
 def ask_ai(prompt):
 
-    response = client.chat.completions.create(
+    try:
 
-        model="llama3-70b-8192",
+        response = client.chat.completions.create(
 
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
+            model="llama-3.3-70b-versatile",
 
-        temperature=0.4
-    )
+            messages=[
+                {
+                    "role":"user",
+                    "content":prompt
+                }
+            ],
 
-    return response.choices[0].message.content
+            temperature=0.4
+        )
+
+        return response.choices[0].message.content
+
+
+    except Exception as e:
+
+        return (
+            "AI error occurred. "
+            "Please check your Groq key/model settings."
+        )
 
 
 
-# ----------------------
-# Sidebar
-# ----------------------
+# -----------------------
+# SIDEBAR
+# -----------------------
 
 with st.sidebar:
 
     st.title("⚒️ StudyForge")
+
 
     difficulty = st.selectbox(
         "Difficulty",
@@ -186,7 +344,7 @@ with st.sidebar:
     )
 
 
-    if st.button("Clear History"):
+    if st.button("Clear Chat"):
 
         cursor.execute(
             "DELETE FROM messages"
@@ -198,25 +356,34 @@ with st.sidebar:
 
 
 
-# ----------------------
-# Main UI
-# ----------------------
+# -----------------------
+# MAIN
+# -----------------------
 
 st.title("⚒️ StudyForge AI")
 
 st.caption(
-    "Your adaptive AI study assistant"
+    "Adaptive AI learning assistant"
 )
 
 
 
-# Display old messages
-
 for role, message in get_messages():
 
-    with st.chat_message(role):
+    css = (
+        "user-box"
+        if role == "user"
+        else "ai-box"
+    )
 
-        st.markdown(message)
+    st.markdown(
+        f"""
+        <div class="{css}">
+        {message}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
 
@@ -234,65 +401,73 @@ if question:
     )
 
 
-    with st.chat_message("user"):
-        st.markdown(question)
+    st.markdown(
+        f"""
+        <div class="user-box">
+        {question}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
     subject = detect_subject(question)
 
 
-    prompt = create_prompt(
-        question,
-        subject,
-        difficulty,
-        mode
+    answer = ask_ai(
+        create_prompt(
+            question,
+            subject,
+            difficulty,
+            mode
+        )
     )
 
 
-    with st.chat_message("assistant"):
-
-        with st.spinner("Thinking..."):
-
-            answer = ask_ai(prompt)
-
-
-        st.markdown(answer)
-
-
-        col1, col2 = st.columns(2)
-
-
-        with col1:
-
-            if st.button(
-                "👍 Helpful",
-                key="good"
-            ):
-
-                save_feedback(
-                    answer,
-                    "positive"
-                )
-
-                st.success("Saved")
-
-
-        with col2:
-
-            if st.button(
-                "👎 Improve",
-                key="bad"
-            ):
-
-                save_feedback(
-                    answer,
-                    "negative"
-                )
-
-                st.warning("Saved")
+    st.markdown(
+        f"""
+        <div class="ai-box">
+        {answer}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
     save_message(
         "assistant",
         answer
     )
+
+
+    col1, col2 = st.columns(2)
+
+
+    with col1:
+
+        if st.button(
+            "👍 Helpful",
+            key="helpful_" + question[:10]
+        ):
+
+            save_feedback(
+                answer,
+                "positive"
+            )
+
+            st.success("Saved")
+
+
+    with col2:
+
+        if st.button(
+            "👎 Improve",
+            key="improve_" + question[:10]
+        ):
+
+            save_feedback(
+                answer,
+                "negative"
+            )
+
+            st.warning("Saved")
