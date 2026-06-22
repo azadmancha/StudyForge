@@ -2,46 +2,243 @@ import streamlit as st
 from groq import Groq
 import os
 
-st.set_page_config(page_title="StudyForge", page_icon="⚒️")
 
-st.title("StudyForge ⚒️")
-st.write("AI Tutor for Math & Physics")
+# ---------- PAGE ----------
+st.set_page_config(
+    page_title="StudyForge",
+    page_icon="⚒️",
+    layout="wide"
+)
 
-# API client
+
+# ---------- STYLE ----------
+st.markdown("""
+<style>
+.block-container {
+    padding-top: 2rem;
+}
+
+h1 {
+    text-align: center;
+}
+
+.stButton button {
+    border-radius: 12px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# ---------- CLIENT ----------
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# System prompt (FIXED)
-system_prompt = """You are an expert Physics and Math tutor.
 
-Your job is to give accurate, clear, exam-quality solutions.
+# ---------- MEMORY ----------
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-RULES:
-1. Solve step by step in a clear and structured way.
-2. Be careful with arithmetic, algebra, units, and percentage conversions.
-3. Convert all percentages correctly before calculation.
-4. Ensure logical consistency in every step.
-5. Internally verify all calculations and reasoning before giving the final answer.
-6. If any mistake is found during reasoning, correct it silently before responding.
 
-OUTPUT RULES:
-- Show step-by-step solution clearly.
-- Provide the final answer clearly at the end.
-- Do NOT show any verification or internal reasoning.
-- Do NOT mention re-checking or self-correction.
+# ---------- SIDEBAR ----------
+with st.sidebar:
+
+    st.title("⚒️ StudyForge")
+    st.caption("Your AI-powered learning workspace")
+
+    subject = st.selectbox(
+        "📚 Subject",
+        ["Math", "Physics"]
+    )
+
+    depth = st.selectbox(
+        "🧠 Learning Depth",
+        [
+            "Basic",
+            "Standard",
+            "Deep Dive"
+        ]
+    )
+
+
+    exam_mode = st.toggle(
+        "📝 Exam Mode"
+    )
+
+
+    hint_mode = st.toggle(
+        "💡 Hint Mode"
+    )
+
+
+    st.divider()
+
+
+    st.subheader("📘 Formula Bank")
+
+    if subject == "Math":
+
+        st.write("""
+**Algebra**
+- (a+b)² = a²+2ab+b²
+- Quadratic formula
+
+**Geometry**
+- Area
+- Volume
+- Pythagoras
+
+**Trigonometry**
+- sin, cos, tan
+- identities
+
+**Calculus**
+- Derivatives
+- Integration basics
+""")
+
+
+    else:
+
+        st.write("""
+**Mechanics**
+- v=u+at
+- F=ma
+- Work Energy
+
+**Waves**
+- v=fλ
+
+**Electricity**
+- V=IR
+- P=VI
+
+**Optics**
+- Lens formula
+- Mirror formula
+""")
+
+
+    st.divider()
+
+
+    if st.button("🗑️ Clear Chat"):
+        st.session_state.messages = []
+        st.rerun()
+
+
+
+# ---------- HEADER ----------
+st.title("⚒️ StudyForge")
+
+st.caption(
+    "Understand. Practice. Improve."
+)
+
+
+# ---------- CHAT ----------
+for message in st.session_state.messages:
+
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+
+
+# ---------- INPUT ----------
+question = st.chat_input(
+    "Ask a Math or Physics question..."
+)
+
+
+
+# ---------- AI ----------
+if question:
+
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": question
+        }
+    )
+
+
+    if hint_mode:
+        output_style = """
+Give hints only.
+Do not give the final answer unless the user asks.
+"""
+    else:
+        output_style = """
+Give a complete solution.
 """
 
-question = st.text_input("Ask your question")
 
-if question:
-    with st.spinner("Thinking... ⚒️"):
+    if exam_mode:
+        exam_style = """
+Use exam format:
+Given:
+Formula:
+Working:
+Answer:
+"""
+    else:
+        exam_style = """
+Explain like a tutor.
+"""
 
-        response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": question}
-            ]
-        )
 
-        answer = response.choices[0].message.content
-        st.write(answer)
+    prompt = f"""
+You are StudyForge, an expert {subject} tutor.
+
+Learning depth:
+{depth}
+
+Rules:
+- Give accurate answers.
+- Check calculations internally before replying.
+- Fix mistakes before answering.
+- Do not mention checking or internal reasoning.
+
+Math:
+- Use LaTeX for equations.
+
+Physics:
+- Include formulas and units.
+
+{exam_style}
+
+{output_style}
+
+Be clear and student friendly.
+"""
+
+
+    with st.chat_message("assistant"):
+
+        with st.spinner("Forging answer... ⚒️"):
+
+            response = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": prompt
+                    },
+                    {
+                        "role": "user",
+                        "content": question
+                    }
+                ]
+            )
+
+
+            answer = response.choices[0].message.content
+
+
+            st.markdown(answer)
+
+
+    st.session_state.messages.append(
+        {
+            "role": "assistant",
+            "content": answer
+        }
+    )
