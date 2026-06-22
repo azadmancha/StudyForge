@@ -99,3 +99,5 @@ Built by **Azad**, a Grade 12 student interested in AI, technology, and building
 **Version 1 — Live and improving**
 
 A student-built AI education project focused on making learning simpler and more accessible.
+
+coming soon v2
