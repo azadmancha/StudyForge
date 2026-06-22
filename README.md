@@ -7,7 +7,7 @@ StudyForge is a student-built AI tutor designed to make learning easier, more in
 It helps students understand difficult concepts by providing clear explanations, guided solutions, and exam-focused support.
 
 🌐 **Live Demo:**  
-[Open StudyForge](YOUR_STREAMLIT_LINK)
+[Open StudyForge](https://studyforge.streamlit.app/)
 
 ---
 
