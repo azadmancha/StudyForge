@@ -1,196 +1,298 @@
 import streamlit as st
 import sqlite3
 from groq import Groq
-import datetime
 
-# =========================
-# CONFIG
-# =========================
 
-st.set_page_config(page_title="StudyForge AI", layout="wide")
+# ----------------------
+# Setup
+# ----------------------
 
-client = Groq(api_key="YOUR_GROQ_API_KEY")
+st.set_page_config(
+    page_title="StudyForge AI",
+    page_icon="⚒️",
+    layout="wide"
+)
 
-# =========================
-# DATABASE
-# =========================
 
-conn = sqlite3.connect("studyforge.db", check_same_thread=False)
-c = conn.cursor()
+client = Groq(
+    api_key=st.secrets["GROQ_API_KEY"]
+)
 
-c.execute("""
-CREATE TABLE IF NOT EXISTS chat_history (
+
+# ----------------------
+# Database
+# ----------------------
+
+db = sqlite3.connect(
+    "studyforge.db",
+    check_same_thread=False
+)
+
+cursor = db.cursor()
+
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS messages(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     role TEXT,
-    message TEXT,
-    timestamp TEXT
+    content TEXT
 )
 """)
 
-c.execute("""
-CREATE TABLE IF NOT EXISTS feedback (
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS feedback(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    message TEXT,
-    feedback TEXT,
-    timestamp TEXT
+    response TEXT,
+    rating TEXT
 )
 """)
 
-conn.commit()
+db.commit()
 
-# =========================
-# UTILS
-# =========================
 
-def save_chat(role, message):
-    c.execute(
-        "INSERT INTO chat_history (role, message, timestamp) VALUES (?, ?, ?)",
-        (role, message, str(datetime.datetime.now()))
+
+def save_message(role, content):
+
+    cursor.execute(
+        "INSERT INTO messages(role,content) VALUES (?,?)",
+        (role, content)
     )
-    conn.commit()
 
-def load_chat():
-    c.execute("SELECT role, message FROM chat_history")
-    return c.fetchall()
+    db.commit()
 
-def save_feedback(message, fb):
-    c.execute(
-        "INSERT INTO feedback (message, feedback, timestamp) VALUES (?, ?, ?)",
-        (message, fb, str(datetime.datetime.now()))
+
+
+def get_messages():
+
+    cursor.execute(
+        "SELECT role,content FROM messages ORDER BY id"
     )
-    conn.commit()
 
-# =========================
-# SUBJECT DETECTION (SIMPLE)
-# =========================
+    return cursor.fetchall()
 
-def detect_subject(q):
-    q = q.lower()
-    if any(x in q for x in ["x=", "solve", "equation", "math"]):
+
+
+def save_feedback(response, rating):
+
+    cursor.execute(
+        "INSERT INTO feedback(response,rating) VALUES (?,?)",
+        (response, rating)
+    )
+
+    db.commit()
+
+
+
+# ----------------------
+# AI Logic
+# ----------------------
+
+def detect_subject(text):
+
+    text = text.lower()
+
+    if any(word in text for word in [
+        "equation",
+        "algebra",
+        "solve",
+        "math"
+    ]):
         return "Math"
-    elif any(x in q for x in ["force", "energy", "physics", "acceleration"]):
+
+    if any(word in text for word in [
+        "force",
+        "energy",
+        "velocity",
+        "physics"
+    ]):
         return "Physics"
-    else:
-        return "General"
 
-# =========================
-# PROMPT ENGINE
-# =========================
+    return "General"
 
-def build_prompt(question, subject, difficulty, mode):
 
-    base = f"""
+
+def create_prompt(
+    question,
+    subject,
+    difficulty,
+    mode
+):
+
+    return f"""
 You are StudyForge AI Tutor.
 
-Rules:
-- Subject: {subject}
-- Difficulty: {difficulty}
-- Mode: {mode}
+Subject: {subject}
+Difficulty: {difficulty}
+Mode: {mode}
 
-Always:
+Instructions:
+- Teach clearly
 - Explain step by step
-- Be clear and structured
-- Use simple language when needed
+- Do not just give answers
+- Adapt to the student's level
+
+Question:
+{question}
 """
 
-    if mode == "Exam Mode":
-        base += "\nFormat: Answer like a school exam solution."
 
-    if mode == "Hint Mode":
-        base += "\nGive hints first, not full solution."
 
-    return base + f"\n\nQuestion: {question}"
+def ask_ai(prompt):
 
-# =========================
-# AI CALL
-# =========================
-
-def get_ai_response(prompt):
     response = client.chat.completions.create(
+
         model="llama3-70b-8192",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.5
+
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+
+        temperature=0.4
     )
+
     return response.choices[0].message.content
 
-# =========================
-# SIDEBAR
-# =========================
 
-st.sidebar.title("⚒️ StudyForge Controls")
 
-difficulty = st.sidebar.selectbox(
-    "Difficulty",
-    ["Easy", "Normal", "Advanced"]
+# ----------------------
+# Sidebar
+# ----------------------
+
+with st.sidebar:
+
+    st.title("⚒️ StudyForge")
+
+    difficulty = st.selectbox(
+        "Difficulty",
+        [
+            "Easy",
+            "Normal",
+            "Advanced"
+        ]
+    )
+
+
+    mode = st.selectbox(
+        "Mode",
+        [
+            "Normal",
+            "Exam",
+            "Hint"
+        ]
+    )
+
+
+    if st.button("Clear History"):
+
+        cursor.execute(
+            "DELETE FROM messages"
+        )
+
+        db.commit()
+
+        st.rerun()
+
+
+
+# ----------------------
+# Main UI
+# ----------------------
+
+st.title("⚒️ StudyForge AI")
+
+st.caption(
+    "Your adaptive AI study assistant"
 )
 
-mode = st.sidebar.selectbox(
-    "Mode",
-    ["Normal Mode", "Exam Mode", "Hint Mode"]
-)
 
-st.sidebar.markdown("---")
 
-if st.sidebar.button("🧹 Clear Chat"):
-    c.execute("DELETE FROM chat_history")
-    conn.commit()
-    st.rerun()
+# Display old messages
 
-# =========================
-# MAIN UI
-# =========================
+for role, message in get_messages():
 
-st.title("⚒️ StudyForge AI (V1.5)")
-st.caption("Your adaptive AI learning tutor")
-
-# Load chat
-chat = load_chat()
-
-# Display chat history FIRST (FIXED ISSUE)
-for role, msg in chat:
     with st.chat_message(role):
-        st.markdown(msg)
 
-# Input
-question = st.chat_input("Ask your question...")
+        st.markdown(message)
+
+
+
+question = st.chat_input(
+    "Ask your question..."
+)
+
+
 
 if question:
 
+    save_message(
+        "user",
+        question
+    )
+
+
+    with st.chat_message("user"):
+        st.markdown(question)
+
+
     subject = detect_subject(question)
 
-    prompt = build_prompt(
+
+    prompt = create_prompt(
         question,
         subject,
         difficulty,
         mode
     )
 
-    answer = get_ai_response(prompt)
-
-    # Save user message
-    save_chat("user", question)
-
-    # Save AI response
-    save_chat("assistant", answer)
-
-    # Display immediately
-    with st.chat_message("user"):
-        st.markdown(question)
 
     with st.chat_message("assistant"):
+
+        with st.spinner("Thinking..."):
+
+            answer = ask_ai(prompt)
+
+
         st.markdown(answer)
 
-        # =========================
-        # FEEDBACK SYSTEM
-        # =========================
+
         col1, col2 = st.columns(2)
 
+
         with col1:
-            if st.button("👍 Helpful"):
-                save_feedback(answer, "positive")
-                st.success("Feedback saved")
+
+            if st.button(
+                "👍 Helpful",
+                key="good"
+            ):
+
+                save_feedback(
+                    answer,
+                    "positive"
+                )
+
+                st.success("Saved")
+
 
         with col2:
-            if st.button("👎 Not Helpful"):
-                save_feedback(answer, "negative")
-                st.warning("Feedback saved")
+
+            if st.button(
+                "👎 Improve",
+                key="bad"
+            ):
+
+                save_feedback(
+                    answer,
+                    "negative"
+                )
+
+                st.warning("Saved")
+
+
+    save_message(
+        "assistant",
+        answer
+    )
