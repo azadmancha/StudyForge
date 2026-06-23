@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 from groq import Groq
 import uuid
+from datetime import datetime
 
 
 # =====================
@@ -9,33 +10,31 @@ import uuid
 # =====================
 
 st.set_page_config(
-    page_title="StudyForge AI",
+    page_title="StudyForge AI v1.7",
     page_icon="⚒️",
     layout="wide"
 )
+
+
+CREATOR = "Azad"
+VERSION = "v1.7"
 
 
 st.markdown("""
 <style>
 
 .user-box {
-    background: rgba(70,120,255,0.18);
-    padding:14px;
-    border-radius:14px;
-    margin:10px 0;
-    border:1px solid rgba(120,120,120,0.25);
+background: rgba(70,120,255,0.18);
+padding:14px;
+border-radius:14px;
+margin:10px 0;
 }
 
 .ai-box {
-    background: rgba(140,140,140,0.18);
-    padding:14px;
-    border-radius:14px;
-    margin:10px 0;
-    border:1px solid rgba(120,120,120,0.25);
-}
-
-textarea {
-    background: transparent !important;
+background: rgba(140,140,140,0.18);
+padding:14px;
+border-radius:14px;
+margin:10px 0;
 }
 
 </style>
@@ -48,7 +47,7 @@ textarea {
 # =====================
 
 if "GROQ_API_KEY" not in st.secrets:
-    st.error("Missing GROQ_API_KEY in Streamlit Secrets")
+    st.error("Missing GROQ_API_KEY")
     st.stop()
 
 
@@ -71,9 +70,19 @@ cursor = db.cursor()
 
 
 cursor.execute("""
+CREATE TABLE IF NOT EXISTS users(
+id TEXT PRIMARY KEY,
+name TEXT
+)
+""")
+
+
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS chats(
 id TEXT PRIMARY KEY,
-title TEXT
+user_id TEXT,
+title TEXT,
+created TEXT
 )
 """)
 
@@ -88,17 +97,33 @@ content TEXT
 """)
 
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS feedback(
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-response TEXT,
-rating TEXT
-)
-""")
-
-
 db.commit()
 
+
+
+# =====================
+# USER
+# =====================
+
+if "user_id" not in st.session_state:
+
+    st.session_state.user_id = str(uuid.uuid4())
+
+    cursor.execute(
+        "INSERT INTO users VALUES (?,?)",
+        (
+            st.session_state.user_id,
+            "User"
+        )
+    )
+
+    db.commit()
+
+
+
+# =====================
+# CHAT FUNCTIONS
+# =====================
 
 
 def create_chat():
@@ -106,8 +131,16 @@ def create_chat():
     cid = str(uuid.uuid4())
 
     cursor.execute(
-        "INSERT INTO chats VALUES (?,?)",
-        (cid,"New Chat")
+        """
+        INSERT INTO chats
+        VALUES (?,?,?,?)
+        """,
+        (
+            cid,
+            st.session_state.user_id,
+            "New Chat",
+            str(datetime.now())
+        )
     )
 
     db.commit()
@@ -119,7 +152,13 @@ def create_chat():
 def get_chats():
 
     cursor.execute(
-        "SELECT * FROM chats ORDER BY rowid DESC"
+        """
+        SELECT id,title
+        FROM chats
+        WHERE user_id=?
+        ORDER BY created DESC
+        """,
+        (st.session_state.user_id,)
     )
 
     return cursor.fetchall()
@@ -134,7 +173,11 @@ def save_message(chat,role,text):
         (chat_id,role,content)
         VALUES (?,?,?)
         """,
-        (chat,role,text)
+        (
+            chat,
+            role,
+            text
+        )
     )
 
     db.commit()
@@ -173,33 +216,15 @@ def delete_chat(chat):
 
 
 
-def save_feedback(text,rating):
-
-    cursor.execute(
-        """
-        INSERT INTO feedback(response,rating)
-        VALUES (?,?)
-        """,
-        (text,rating)
-    )
-
-    db.commit()
-
-
-
-# =====================
-# SESSION
-# =====================
-
 if "chat_id" not in st.session_state:
 
-    chats = get_chats()
+    chats=get_chats()
 
     if chats:
-        st.session_state.chat_id = chats[0][0]
+        st.session_state.chat_id=chats[0][0]
 
     else:
-        st.session_state.chat_id = create_chat()
+        st.session_state.chat_id=create_chat()
 
 
 
@@ -207,7 +232,7 @@ if "chat_id" not in st.session_state:
 # SUBJECTS
 # =====================
 
-SUBJECTS = [
+SUBJECTS=[
 "Mathematics",
 "Physics",
 "Chemistry",
@@ -222,82 +247,27 @@ SUBJECTS = [
 ]
 
 
-
 def detect_subject(q):
 
-    q = q.lower()
+    q=q.lower()
 
+    if any(x in q for x in ["math","equation","algebra"]):
+        return "Mathematics"
 
-    data = {
+    if any(x in q for x in ["python","code","algorithm"]):
+        return "Computer Science"
 
-    "Mathematics":
-    ["math","equation","algebra","calculus",
-     "geometry","probability"],
+    if any(x in q for x in ["essay","grammar","writing"]):
+        return "English"
 
-    "Physics":
-    ["force","energy","motion",
-     "velocity","physics"],
-
-    "Chemistry":
-    ["atom","reaction",
-     "chemical","chemistry"],
-
-    "Biology":
-    ["cell","dna","biology"],
-
-    "Computer Science":
-    ["code","python",
-     "algorithm","program"],
-
-    "English":
-    ["grammar","essay",
-     "writing"],
-
-    "History":
-    ["war","empire",
-     "history"],
-
-    "Geography":
-    ["earth","climate",
-     "map"],
-
-    "Economics":
-    ["market","demand",
-     "supply"],
-
-    "Social Science":
-    ["government",
-     "society"]
-
-    }
-
-
-    scores = {}
-
-    for subject,words in data.items():
-
-        scores[subject] = sum(
-            word in q for word in words
-        )
-
-
-    best = max(
-        scores,
-        key=scores.get
-    )
-
-
-    if scores[best] == 0:
-        return "General"
-
-
-    return best
+    return "General"
 
 
 
 # =====================
 # AI
 # =====================
+
 
 def build_prompt(
     question,
@@ -308,26 +278,30 @@ def build_prompt(
 
     return f"""
 
-You are StudyForge AI Tutor.
+You are StudyForge AI.
+
+You were created by Azad.
+
+Never claim you were created by Meta,
+OpenAI, or another company.
+
+You are an educational assistant.
 
 Subject:
 {subject}
 
-Learning depth:
+Depth:
 {depth}
 
 Mode:
 {mode}
 
 Rules:
-- Answer the question directly first.
-- Do not ask "can you confirm?"
-- Do not ask for unnecessary validation.
-- Match length to difficulty.
-- Simple calculations need short answers.
-- Teach step by step for learning questions.
-- Use examples only when useful.
-- Be accurate.
+- Answer directly.
+- Never ask "can you confirm?"
+- Do not ask unnecessary questions.
+- Adapt explanation level.
+- Teach clearly.
 
 Question:
 {question}
@@ -335,12 +309,11 @@ Question:
 """
 
 
-
 def ask_ai(prompt):
 
     try:
 
-        response = client.chat.completions.create(
+        response=client.chat.completions.create(
 
             model="llama-3.3-70b-versatile",
 
@@ -354,13 +327,12 @@ def ask_ai(prompt):
             temperature=0.3
         )
 
-
         return response.choices[0].message.content
 
 
     except Exception:
 
-        return "AI error. Check Groq settings."
+        return "AI error. Check API settings."
 
 
 
@@ -368,23 +340,25 @@ def ask_ai(prompt):
 # SIDEBAR
 # =====================
 
+
 with st.sidebar:
 
     st.title("⚒️ StudyForge")
 
+    st.caption(
+        f"{VERSION} | Created by {CREATOR}"
+    )
+
 
     if st.button("➕ New Chat"):
 
-        st.session_state.chat_id = create_chat()
-
+        st.session_state.chat_id=create_chat()
         st.rerun()
-
 
 
     st.divider()
 
-
-    st.subheader("Chats")
+    st.subheader("Your Chats")
 
 
     for cid,title in get_chats():
@@ -394,16 +368,12 @@ with st.sidebar:
             key=cid
         ):
 
-            st.session_state.chat_id = cid
-
+            st.session_state.chat_id=cid
             st.rerun()
 
 
 
-    st.divider()
-
-
-    depth = st.selectbox(
+    depth=st.selectbox(
         "Learning Depth",
         [
         "Quick",
@@ -414,7 +384,7 @@ with st.sidebar:
     )
 
 
-    mode = st.selectbox(
+    mode=st.selectbox(
         "Mode",
         [
         "Normal",
@@ -425,14 +395,13 @@ with st.sidebar:
     )
 
 
-    if st.button("Delete Current Chat"):
+    if st.button("Delete Chat"):
 
         delete_chat(
             st.session_state.chat_id
         )
 
-        st.session_state.chat_id = create_chat()
-
+        st.session_state.chat_id=create_chat()
         st.rerun()
 
 
@@ -441,10 +410,15 @@ with st.sidebar:
 # MAIN
 # =====================
 
+
 st.title("⚒️ StudyForge AI")
 
+st.caption(
+    f"{VERSION} — Created by {CREATOR}"
+)
 
-st.subheader("Available Subjects")
+
+st.subheader("Subjects")
 
 st.write(
     " • ".join(SUBJECTS)
@@ -456,11 +430,7 @@ for role,msg in get_messages(
     st.session_state.chat_id
 ):
 
-    box = (
-        "user-box"
-        if role=="user"
-        else "ai-box"
-    )
+    box="user-box" if role=="user" else "ai-box"
 
     st.markdown(
         f"""
@@ -473,10 +443,9 @@ for role,msg in get_messages(
 
 
 
-question = st.chat_input(
+question=st.chat_input(
     "Ask anything..."
 )
-
 
 
 if question:
@@ -488,22 +457,12 @@ if question:
     )
 
 
-    st.markdown(
-        f"""
-        <div class="user-box">
-        {question}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-    subject = detect_subject(question)
+    subject=detect_subject(question)
 
 
     with st.spinner("Thinking..."):
 
-        answer = ask_ai(
+        answer=ask_ai(
             build_prompt(
                 question,
                 subject,
@@ -513,18 +472,11 @@ if question:
         )
 
 
-    st.markdown(
-        f"""
-        <div class="ai-box">
-        {answer}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
     save_message(
         st.session_state.chat_id,
         "assistant",
         answer
-        )
+    )
+
+
+    st.rerun()
