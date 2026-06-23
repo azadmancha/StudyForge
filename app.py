@@ -10,14 +10,13 @@ from datetime import datetime
 # =====================
 
 st.set_page_config(
-    page_title="StudyForge AI v1.7",
+    page_title="StudyForge AI",
     page_icon="⚒️",
     layout="wide"
 )
 
-
-CREATOR = "Azad"
 VERSION = "v1.7"
+CREATOR = "Azad"
 
 
 st.markdown("""
@@ -41,13 +40,12 @@ margin:10px 0;
 """, unsafe_allow_html=True)
 
 
-
 # =====================
 # GROQ
 # =====================
 
 if "GROQ_API_KEY" not in st.secrets:
-    st.error("Missing GROQ_API_KEY")
+    st.error("Missing GROQ_API_KEY in Streamlit Secrets")
     st.stop()
 
 
@@ -56,13 +54,12 @@ client = Groq(
 )
 
 
-
 # =====================
-# DATABASE
+# DATABASE v1.7
 # =====================
 
 db = sqlite3.connect(
-    "studyforge.db",
+    "studyforge_v17.db",
     check_same_thread=False
 )
 
@@ -110,7 +107,10 @@ if "user_id" not in st.session_state:
     st.session_state.user_id = str(uuid.uuid4())
 
     cursor.execute(
-        "INSERT INTO users VALUES (?,?)",
+        """
+        INSERT INTO users
+        VALUES (?,?)
+        """,
         (
             st.session_state.user_id,
             "User"
@@ -124,7 +124,6 @@ if "user_id" not in st.session_state:
 # =====================
 # CHAT FUNCTIONS
 # =====================
-
 
 def create_chat():
 
@@ -165,7 +164,7 @@ def get_chats():
 
 
 
-def save_message(chat,role,text):
+def save_message(chat, role, text):
 
     cursor.execute(
         """
@@ -216,23 +215,25 @@ def delete_chat(chat):
 
 
 
+# =====================
+# SESSION
+# =====================
+
 if "chat_id" not in st.session_state:
 
-    chats=get_chats()
+    chats = get_chats()
 
     if chats:
-        st.session_state.chat_id=chats[0][0]
+        st.session_state.chat_id = chats[0][0]
 
     else:
-        st.session_state.chat_id=create_chat()
-
-
+        st.session_state.chat_id = create_chat()
 
 # =====================
 # SUBJECTS
 # =====================
 
-SUBJECTS=[
+SUBJECTS = [
 "Mathematics",
 "Physics",
 "Chemistry",
@@ -249,18 +250,141 @@ SUBJECTS=[
 
 def detect_subject(q):
 
-    q=q.lower()
+    q = q.lower()
 
-    if any(x in q for x in ["math","equation","algebra"]):
-        return "Mathematics"
 
-    if any(x in q for x in ["python","code","algorithm"]):
-        return "Computer Science"
+    data = {
 
-    if any(x in q for x in ["essay","grammar","writing"]):
-        return "English"
+    "Mathematics":
+    [
+    "math",
+    "equation",
+    "algebra",
+    "calculus",
+    "geometry",
+    "probability",
+    "trigonometry",
+    "statistics"
+    ],
 
-    return "General"
+
+    "Physics":
+    [
+    "force",
+    "energy",
+    "motion",
+    "velocity",
+    "acceleration",
+    "physics",
+    "electricity",
+    "wave"
+    ],
+
+
+    "Chemistry":
+    [
+    "atom",
+    "reaction",
+    "chemical",
+    "chemistry",
+    "molecule",
+    "bond"
+    ],
+
+
+    "Biology":
+    [
+    "cell",
+    "dna",
+    "biology",
+    "organ",
+    "genetics"
+    ],
+
+
+    "Computer Science":
+    [
+    "code",
+    "python",
+    "program",
+    "algorithm",
+    "database",
+    "api",
+    "computer"
+    ],
+
+
+    "English":
+    [
+    "grammar",
+    "essay",
+    "writing",
+    "literature",
+    "vocabulary"
+    ],
+
+
+    "History":
+    [
+    "war",
+    "empire",
+    "history",
+    "civilization",
+    "revolution"
+    ],
+
+
+    "Geography":
+    [
+    "earth",
+    "climate",
+    "map",
+    "geography",
+    "environment"
+    ],
+
+
+    "Economics":
+    [
+    "market",
+    "demand",
+    "supply",
+    "economics",
+    "inflation"
+    ],
+
+
+    "Social Science":
+    [
+    "government",
+    "society",
+    "politics",
+    "culture"
+    ]
+
+    }
+
+
+    scores = {}
+
+    for subject,words in data.items():
+
+        scores[subject] = sum(
+            word in q for word in words
+        )
+
+
+    best = max(
+        scores,
+        key=scores.get
+    )
+
+
+    if scores[best] == 0:
+        return "General"
+
+
+    return best
 
 
 
@@ -278,30 +402,29 @@ def build_prompt(
 
     return f"""
 
-You are StudyForge AI.
+You are StudyForge AI Tutor.
 
 You were created by Azad.
 
-Never claim you were created by Meta,
-OpenAI, or another company.
-
-You are an educational assistant.
+Never say you were created by Meta,
+OpenAI, or any other company.
 
 Subject:
 {subject}
 
-Depth:
+Learning depth:
 {depth}
 
 Mode:
 {mode}
 
 Rules:
-- Answer directly.
+- Answer directly first.
 - Never ask "can you confirm?"
-- Do not ask unnecessary questions.
-- Adapt explanation level.
-- Teach clearly.
+- Do not ask unnecessary validation.
+- Adjust explanation to user level.
+- Simple questions get simple answers.
+- Teaching questions get step-by-step explanations.
 
 Question:
 {question}
@@ -309,30 +432,32 @@ Question:
 """
 
 
+
 def ask_ai(prompt):
 
     try:
 
-        response=client.chat.completions.create(
+        response = client.chat.completions.create(
 
             model="llama-3.3-70b-versatile",
 
             messages=[
                 {
-                "role":"user",
-                "content":prompt
+                    "role":"user",
+                    "content":prompt
                 }
             ],
 
             temperature=0.3
         )
 
+
         return response.choices[0].message.content
 
 
     except Exception:
 
-        return "AI error. Check API settings."
+        return "AI error. Check Groq settings."
 
 
 
@@ -352,8 +477,9 @@ with st.sidebar:
 
     if st.button("➕ New Chat"):
 
-        st.session_state.chat_id=create_chat()
+        st.session_state.chat_id = create_chat()
         st.rerun()
+
 
 
     st.divider()
@@ -368,12 +494,15 @@ with st.sidebar:
             key=cid
         ):
 
-            st.session_state.chat_id=cid
+            st.session_state.chat_id = cid
             st.rerun()
 
 
 
-    depth=st.selectbox(
+    st.divider()
+
+
+    depth = st.selectbox(
         "Learning Depth",
         [
         "Quick",
@@ -384,7 +513,7 @@ with st.sidebar:
     )
 
 
-    mode=st.selectbox(
+    mode = st.selectbox(
         "Mode",
         [
         "Normal",
@@ -395,21 +524,21 @@ with st.sidebar:
     )
 
 
-    if st.button("Delete Chat"):
+    if st.button("Delete Current Chat"):
 
         delete_chat(
             st.session_state.chat_id
         )
 
         st.session_state.chat_id=create_chat()
+
         st.rerun()
 
 
 
 # =====================
-# MAIN
+# MAIN UI
 # =====================
-
 
 st.title("⚒️ StudyForge AI")
 
@@ -418,7 +547,7 @@ st.caption(
 )
 
 
-st.subheader("Subjects")
+st.subheader("Available Subjects")
 
 st.write(
     " • ".join(SUBJECTS)
@@ -430,7 +559,12 @@ for role,msg in get_messages(
     st.session_state.chat_id
 ):
 
-    box="user-box" if role=="user" else "ai-box"
+    box = (
+        "user-box"
+        if role=="user"
+        else "ai-box"
+    )
+
 
     st.markdown(
         f"""
@@ -443,12 +577,14 @@ for role,msg in get_messages(
 
 
 
-question=st.chat_input(
+question = st.chat_input(
     "Ask anything..."
 )
 
 
+
 if question:
+
 
     save_message(
         st.session_state.chat_id,
@@ -457,12 +593,13 @@ if question:
     )
 
 
-    subject=detect_subject(question)
+    subject = detect_subject(question)
 
 
     with st.spinner("Thinking..."):
 
-        answer=ask_ai(
+
+        answer = ask_ai(
             build_prompt(
                 question,
                 subject,
@@ -470,6 +607,7 @@ if question:
                 mode
             )
         )
+
 
 
     save_message(
