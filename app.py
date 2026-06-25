@@ -22,7 +22,7 @@ DB_FILE = "studyforge_v18.db"
 
 
 # =====================
-# UI STYLE
+# STYLE
 # =====================
 
 st.markdown("""
@@ -191,80 +191,35 @@ def detect_subject(q):
 
 
 # =====================
-# SYSTEM PROMPT (OPTIMIZED TUTOR)
+# SYSTEM PROMPT (TUTOR)
 # =====================
 
 def system_prompt(subject):
     return f"""
-You are StudyForge AI, a world-class personal tutor created by Azad.
-
-You are NOT a chatbot. You are a learning system.
+You are StudyForge AI, a personal tutor created by Azad.
 
 Subject: {subject}
 
-=====================
-GOAL
-=====================
-Make the student UNDERSTAND deeply, not just receive answers.
+You are NOT a chatbot. You are a structured tutor.
 
-=====================
-TEACHING RULES
-=====================
-1. Start simple → then build depth
-2. Explain step-by-step if needed
-3. Use examples only when useful
-4. Adjust difficulty automatically
-5. Never be vague
+RULES:
+- Teach step by step
+- Start simple, then deepen
+- Use examples only when useful
+- Adapt to student level
+- Use chat history for context
+- Never restart explanations unnecessarily
 
-=====================
-MODES
-=====================
-Quick → short answer
-Balanced → explanation + example
-Deep Dive → full reasoning
-Expert → formal + edge cases
-
-Hint Mode:
-- give hints first
-- avoid full solution unless asked
-
-Exam Prep:
-- shortcuts
-- patterns
-- tricks
-- speed focus
-
-Concept Builder:
-- connect ideas
-- show relationships
-
-=====================
-MEMORY RULE
-=====================
-- Use full chat history
-- Treat conversation as continuous tutoring session
-- Resolve "this / that / it" from context
-
-=====================
-OUTPUT STRUCTURE
-=====================
+OUTPUT FORMAT:
 1. Direct answer
 2. Explanation
 3. Example (if needed)
 4. Summary
-
-=====================
-BEHAVIOR
-=====================
-- Do NOT ask unnecessary questions
-- Do NOT restart explanations
-- Be clear and confident
-- Stay consistent with past messages
 """
 
 
 # =====================
-# AI CALL WITH MEMORY FIX
+# AI CALL (FIXED MEMORY)
 # =====================
 
 def ask_ai(chat_id, question, subject):
@@ -312,7 +267,7 @@ if "chat_id" not in st.session_state:
 
 
 # =====================
-# AUTO TITLE
+# CHAT TITLE
 # =====================
 
 def make_title(text):
@@ -372,7 +327,7 @@ if question:
 
     save_message(st.session_state.chat_id, "assistant", answer)
 
-    # auto title if new chat
+    # auto rename chat
     chats = get_chats()
     for cid, title in chats:
         if cid == st.session_state.chat_id and title == "New Chat":
@@ -398,7 +353,7 @@ if admin_input.startswith("/admin"):
 
         st.success("Admin Access Granted")
 
-        st.subheader("📊 Admin Dashboard")
+        st.subheader("📊 Dashboard")
 
         st.write("Users:", cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0])
         st.write("Chats:", cursor.execute("SELECT COUNT(*) FROM chats").fetchone()[0])
@@ -406,3 +361,14 @@ if admin_input.startswith("/admin"):
 
         if os.path.exists(DB_FILE):
             with open(DB_FILE, "rb") as f:
+                db_bytes = f.read()
+
+            st.download_button(
+                "Download DB",
+                db_bytes,
+                file_name=DB_FILE,
+                mime="application/octet-stream"
+            )
+
+    elif password:
+        st.error("Invalid password")
