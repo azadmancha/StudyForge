@@ -1,0 +1,281 @@
+# StudyForge Changelog
+
+Development history of StudyForge AI.
+
+---
+
+# v1.0 — Initial AI Tutor Prototype
+
+## Added
+
+- Streamlit-based interface
+- AI chat functionality
+- Groq API integration
+- Basic prompt system
+- AI-generated responses
+
+## Technology
+
+- Python
+- Streamlit
+- Groq API
+
+
+## Goal
+
+Create a simple AI tutor prototype that could answer student questions.
+
+---
+
+# v1.1 — Structured Tutor Responses
+
+## Improved
+
+- AI prompt structure
+- Tutor behaviour
+- Response formatting
+
+## Added
+
+Rules for the AI:
+
+- Answer directly first
+- Avoid unnecessary confirmation questions
+- Match explanation length to difficulty
+- Teach step-by-step when needed
+
+
+## Goal
+
+Make the AI behave more like a tutor instead of a general chatbot.
+
+---
+
+# v1.2 — Subject Detection System
+
+## Added
+
+Automatic subject detection.
+
+Subjects:
+
+- Mathematics
+- Physics
+- Chemistry
+- Biology
+- Computer Science
+- English
+- History
+- Geography
+- Economics
+- Social Science
+- General
+
+
+## Improvement
+
+The AI could adjust responses based on the detected subject.
+
+---
+
+# v1.3 — Learning Controls
+
+## Added
+
+Learning depth selection:
+
+- Quick
+- Balanced
+- Deep Dive
+- Expert
+
+
+Learning modes:
+
+- Normal
+- Exam Prep
+- Hint Mode
+- Concept Builder
+
+
+## Goal
+
+Allow students to control how explanations are delivered.
+
+---
+
+# v1.4 — Chat Storage System
+
+## Added
+
+SQLite database.
+
+Stored:
+
+- chat sessions
+- messages
+- conversation history
+
+
+## Added
+
+Chat management:
+
+- New chat
+- View previous chats
+- Delete chats
+
+
+## Goal
+
+Move from temporary conversations to persistent learning sessions.
+
+---
+
+# v1.5 — Better User Experience
+
+## Improved
+
+- Chat-style interface
+- Message styling
+- Sidebar navigation
+- Subject display
+
+
+## Added
+
+Custom UI styling:
+
+- user message cards
+- AI message cards
+
+
+---
+
+# v1.6 — Deployment Version
+
+## Added
+
+Public deployment.
+
+Live application:
+
+https://studyforge.streamlit.app
+
+
+## Focus
+
+Making StudyForge accessible outside local development.
+
+---
+
+# v1.7 — Current Foundation Version
+
+## Added
+
+Project documentation:
+
+- README
+- Development journey
+- Architecture notes
+- Roadmap
+- Engineering decisions
+
+
+## Improved
+
+- Cleaner project organisation
+- Better AI tutor instructions
+- More product-focused direction
+
+
+## Current Stack
+
+Frontend:
+- Streamlit
+
+Backend:
+- Python
+
+AI:
+- Groq API
+
+Database:
+- SQLite
+
+
+---
+
+# Known Limitations
+
+Current version still needs:
+
+- Context-aware conversations
+- User accounts
+- Student profiles
+- Weakness tracking
+- Progress dashboard
+- Quiz generation
+- RAG with notes/textbooks
+
+
+---
+
+# Future Development
+
+## v1.8
+
+Context upgrade:
+
+- Previous messages sent to AI
+- Better follow-up questions
+
+
+## v1.9
+
+Personalisation:
+
+- User accounts
+- Student profiles
+- Learning preferences
+
+
+## v2.0
+
+Learning system:
+
+- Weakness tracking
+- Progress analytics
+- Quiz generation
+
+
+## v2.5+
+
+Knowledge system:
+
+- Notes upload
+- Textbook retrieval
+- RAG
+
+
+## Future Architecture
+
+- React + Tailwind CSS frontend
+- FastAPI backend
+- PostgreSQL database
+
+
+---
+
+# Reflection
+
+StudyForge started as a small AI tutor experiment.
+
+While building it, I learned that a useful AI application is not only about the model.
+
+The important parts are:
+
+- user experience
+- data management
+- system design
+- continuous improvement
