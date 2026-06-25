@@ -618,3 +618,40 @@ if question:
 
 
     st.rerun()
+
+
+                # =====================
+# ADMIN PANEL
+# =====================
+
+import os
+
+with st.sidebar:
+
+    st.divider()
+    st.subheader("🔐 Admin")
+
+    admin_password = st.text_input(
+        "Admin Password",
+        type="password"
+    )
+
+    if admin_password == st.secrets["ADMIN_PASSWORD"]:
+
+        st.success("Admin access granted")
+
+        if os.path.exists("studyforge.db"):
+
+            with open("studyforge.db", "rb") as f:
+
+                st.download_button(
+                    label="Download Database",
+                    data=f,
+                    file_name="studyforge.db",
+                    mime="application/octet-stream"
+                )
+
+        st.write("Chats:", len(get_chats()))
+
+    elif admin_password:
+        st.error("Wrong password")
