@@ -4,6 +4,7 @@ from groq import Groq
 import uuid
 from datetime import datetime
 import os
+import re
 
 
 # =====================
@@ -16,9 +17,9 @@ st.set_page_config(
     layout="wide"
 )
 
-VERSION = "v1.8"
+VERSION = "v1.9"
 CREATOR = "Azad"
-DB_FILE = "studyforge_v18.db"
+DB_FILE = "studyforge_v19.db"
 
 
 # =====================
@@ -49,7 +50,7 @@ st.markdown("""
 # =====================
 
 if "GROQ_API_KEY" not in st.secrets:
-    st.error("Missing GROQ_API_KEY")
+    st.error("Missing GROQ_API_KEY in secrets")
     st.stop()
 
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
@@ -173,7 +174,7 @@ def detect_subject(q):
     q = q.lower()
 
     data = {
-        "Math": ["math","algebra","equation","geometry"],
+        "Math": ["math","algebra","equation","geometry","calculus"],
         "Physics": ["force","energy","motion","velocity"],
         "Chemistry": ["atom","reaction","chemical"],
         "CS": ["code","python","algorithm","api"],
@@ -191,35 +192,57 @@ def detect_subject(q):
 
 
 # =====================
-# SYSTEM PROMPT (TUTOR)
+# FORMULA HIGHLIGHT
+# =====================
+
+def highlight_math(text):
+    text = re.sub(r'(\b\d+\s*[+\-*/]\s*\d+\b)', r'$\1$', text)
+    return text
+
+
+# =====================
+# TUTOR PROMPT
 # =====================
 
 def system_prompt(subject):
     return f"""
-You are StudyForge AI, a personal tutor created by Azad.
+You are StudyForge AI, a structured tutor created by Azad.
 
 Subject: {subject}
 
-You are NOT a chatbot. You are a structured tutor.
+GOAL:
+Teach clearly, step-by-step, with proper structure.
+
+FORMAT:
+
+1) Direct Answer:
+- short answer
+
+2) Explanation:
+- bullet points
+- each idea on a new line
+
+3) Step-by-step:
+Step 1:
+Step 2:
+Step 3:
+
+4) Example:
+- simple and practical
+
+5) Key Insight:
+- important rule or formula
 
 RULES:
-- Teach step by step
-- Start simple, then deepen
-- Use examples only when useful
-- Adapt to student level
-- Use chat history for context
-- Never restart explanations unnecessarily
-
-OUTPUT FORMAT:
-1. Direct answer
-2. Explanation
-3. Example (if needed)
-4. Summary
+- Use spacing and structure
+- Keep paragraphs short
+- Use LaTeX for math like $x^2 + y^2$
+- Always use chat history
 """
 
 
 # =====================
-# AI CALL (FIXED MEMORY)
+# AI MEMORY FIXED
 # =====================
 
 def ask_ai(chat_id, question, subject):
@@ -251,7 +274,7 @@ def ask_ai(chat_id, question, subject):
             temperature=0.3
         )
 
-        return res.choices[0].message.content
+        return highlight_math(res.choices[0].message.content)
 
     except:
         return "AI error."
@@ -312,7 +335,18 @@ for role, msg in get_messages(st.session_state.chat_id):
 
     box = "user-box" if role == "user" else "ai-box"
 
-    st.markdown(f"<div class='{box}'>{msg}</div>", unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div class="{box}" style="
+            white-space: pre-wrap;
+            line-height: 1.7;
+            font-size: 15px;
+        ">
+        {msg}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
 question = st.chat_input("Ask anything...")
@@ -327,7 +361,6 @@ if question:
 
     save_message(st.session_state.chat_id, "assistant", answer)
 
-    # auto rename chat
     chats = get_chats()
     for cid, title in chats:
         if cid == st.session_state.chat_id and title == "New Chat":
@@ -337,38 +370,49 @@ if question:
 
 
 # =====================
-# ADMIN (/admin password)
+# ADMIN (FIXED + STABLE)
 # =====================
 
-admin_input = st.text_input("")
+if "admin_access" not in st.session_state:
+    st.session_state.admin_access = False
+
+
+st.sidebar.divider()
+st.sidebar.subheader("🔐 Admin")
+
+admin_input = st.sidebar.text_input("Enter /admin <password>", type="password")
 
 if admin_input.startswith("/admin"):
 
-    try:
-        password = admin_input.split(" ", 1)[1]
-    except:
-        password = ""
+    parts = admin_input.split(" ", 1)
 
-    if password == st.secrets.get("ADMIN_PASSWORD", ""):
+    if len(parts) == 2:
 
-        st.success("Admin Access Granted")
+        password = parts[1]
 
-        st.subheader("📊 Dashboard")
+        if password == st.secrets.get("ADMIN_PASSWORD", ""):
+            st.session_state.admin_access = True
+            st.sidebar.success("Admin Access Granted")
+        elif password:
+            st.sidebar.error("Wrong Password")
 
-        st.write("Users:", cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0])
-        st.write("Chats:", cursor.execute("SELECT COUNT(*) FROM chats").fetchone()[0])
-        st.write("Messages:", cursor.execute("SELECT COUNT(*) FROM messages").fetchone()[0])
 
-        if os.path.exists(DB_FILE):
-            with open(DB_FILE, "rb") as f:
-                db_bytes = f.read()
+if st.session_state.admin_access:
 
-            st.download_button(
+    st.sidebar.markdown("### 📊 Stats")
+
+    st.sidebar.write("Users:", cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0])
+    st.sidebar.write("Chats:", cursor.execute("SELECT COUNT(*) FROM chats").fetchone()[0])
+    st.sidebar.write("Messages:", cursor.execute("SELECT COUNT(*) FROM messages").fetchone()[0])
+
+    if os.path.exists(DB_FILE):
+        with open(DB_FILE, "rb") as f:
+            st.sidebar.download_button(
                 "Download DB",
-                db_bytes,
-                file_name=DB_FILE,
-                mime="application/octet-stream"
+                f.read(),
+                file_name=DB_FILE
             )
 
-    elif password:
-        st.error("Invalid password")
+    if st.sidebar.button("Logout Admin"):
+        st.session_state.admin_access = False
+        st.rerun()
