@@ -4,7 +4,6 @@ from groq import Groq
 import uuid
 from datetime import datetime
 import os
-import re
 
 
 # =====================
@@ -17,29 +16,32 @@ st.set_page_config(
     layout="wide"
 )
 
-VERSION = "v1.9"
+VERSION = "v1.8"
 CREATOR = "Azad"
-DB_FILE = "studyforge_v19.db"
+DB_FILE = "studyforge.db"
 
 
 # =====================
-# STYLE
+# STYLE (FIXED SPACING)
 # =====================
 
 st.markdown("""
 <style>
+.user-box, .ai-box {
+    padding: 14px 16px;
+    border-radius: 12px;
+    margin: 12px 0;
+    white-space: pre-wrap;
+    line-height: 1.7;
+    font-size: 15px;
+}
+
 .user-box {
     background: rgba(70,120,255,0.18);
-    padding:14px;
-    border-radius:14px;
-    margin:10px 0;
 }
 
 .ai-box {
     background: rgba(140,140,140,0.18);
-    padding:14px;
-    border-radius:14px;
-    margin:10px 0;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -50,7 +52,7 @@ st.markdown("""
 # =====================
 
 if "GROQ_API_KEY" not in st.secrets:
-    st.error("Missing GROQ_API_KEY in secrets")
+    st.error("Missing GROQ_API_KEY")
     st.stop()
 
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
@@ -63,31 +65,9 @@ client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 db = sqlite3.connect(DB_FILE, check_same_thread=False)
 cursor = db.cursor()
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS users(
-id TEXT PRIMARY KEY,
-name TEXT
-)
-""")
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS chats(
-id TEXT PRIMARY KEY,
-user_id TEXT,
-title TEXT,
-created TEXT
-)
-""")
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS messages(
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-chat_id TEXT,
-role TEXT,
-content TEXT
-)
-""")
-
+cursor.execute("""CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, name TEXT)""")
+cursor.execute("""CREATE TABLE IF NOT EXISTS chats(id TEXT PRIMARY KEY, user_id TEXT, title TEXT, created TEXT)""")
+cursor.execute("""CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT, role TEXT, content TEXT)""")
 db.commit()
 
 
@@ -98,10 +78,8 @@ db.commit()
 if "user_id" not in st.session_state:
     st.session_state.user_id = str(uuid.uuid4())
 
-    cursor.execute(
-        "INSERT INTO users VALUES (?,?)",
-        (st.session_state.user_id, "Student")
-    )
+    cursor.execute("INSERT INTO users VALUES (?,?)",
+                   (st.session_state.user_id, "User"))
     db.commit()
 
 
@@ -109,54 +87,30 @@ if "user_id" not in st.session_state:
 # CHAT FUNCTIONS
 # =====================
 
-def create_chat(title="New Chat"):
+def create_chat():
     cid = str(uuid.uuid4())
 
-    cursor.execute("""
-        INSERT INTO chats VALUES (?,?,?,?)
-    """, (
-        cid,
-        st.session_state.user_id,
-        title,
-        str(datetime.now())
-    ))
-
+    cursor.execute("INSERT INTO chats VALUES (?,?,?,?)",
+                   (cid, st.session_state.user_id, "New Chat", str(datetime.now())))
     db.commit()
     return cid
 
 
 def get_chats():
-    cursor.execute("""
-        SELECT id,title FROM chats
-        WHERE user_id=?
-        ORDER BY created DESC
-    """, (st.session_state.user_id,))
-
+    cursor.execute("SELECT id,title FROM chats WHERE user_id=? ORDER BY created DESC",
+                   (st.session_state.user_id,))
     return cursor.fetchall()
 
 
-def update_title(chat_id, title):
-    cursor.execute("""
-        UPDATE chats SET title=?
-        WHERE id=?
-    """, (title, chat_id))
-    db.commit()
-
-
 def save_message(chat, role, text):
-    cursor.execute("""
-        INSERT INTO messages(chat_id,role,content)
-        VALUES (?,?,?)
-    """, (chat, role, text))
+    cursor.execute("INSERT INTO messages(chat_id,role,content) VALUES (?,?,?)",
+                   (chat, role, text))
     db.commit()
 
 
 def get_messages(chat):
-    cursor.execute("""
-        SELECT role,content FROM messages
-        WHERE chat_id=?
-        ORDER BY id
-    """, (chat,))
+    cursor.execute("SELECT role,content FROM messages WHERE chat_id=? ORDER BY id",
+                   (chat,))
     return cursor.fetchall()
 
 
@@ -167,117 +121,71 @@ def delete_chat(chat):
 
 
 # =====================
-# SUBJECT DETECTION
+# SUBJECT DETECTION (simple but stable)
 # =====================
 
 def detect_subject(q):
     q = q.lower()
 
-    data = {
-        "Math": ["math","algebra","equation","geometry","calculus"],
-        "Physics": ["force","energy","motion","velocity"],
-        "Chemistry": ["atom","reaction","chemical"],
-        "CS": ["code","python","algorithm","api"],
-        "English": ["essay","grammar","writing"],
-        "History": ["war","empire","history"]
-    }
+    if any(x in q for x in ["math","algebra","calculus","equation"]):
+        return "Math"
+    if any(x in q for x in ["force","energy","physics"]):
+        return "Physics"
+    if any(x in q for x in ["atom","reaction","chem"]):
+        return "Chemistry"
+    if any(x in q for x in ["code","python","algorithm"]):
+        return "CS"
+    if any(x in q for x in ["essay","grammar"]):
+        return "English"
 
-    scores = {}
-
-    for s, words in data.items():
-        scores[s] = sum(w in q for w in words)
-
-    best = max(scores, key=scores.get)
-    return best if scores[best] > 0 else "General"
+    return "General"
 
 
 # =====================
-# FORMULA HIGHLIGHT
+# AI PROMPT (tutor behavior fixed)
 # =====================
 
-def highlight_math(text):
-    text = re.sub(r'(\b\d+\s*[+\-*/]\s*\d+\b)', r'$\1$', text)
-    return text
-
-
-# =====================
-# TUTOR PROMPT
-# =====================
-
-def system_prompt(subject):
+def prompt(subject):
     return f"""
-You are StudyForge AI, a structured tutor created by Azad.
+You are StudyForge AI Tutor.
 
 Subject: {subject}
 
-GOAL:
-Teach clearly, step-by-step, with proper structure.
+You must behave like a strict but clear teacher.
 
-FORMAT:
+Format:
+1. Answer (short)
+2. Explanation (bullet points, spaced)
+3. Steps
+4. Example
+5. Key rule
 
-1) Direct Answer:
-- short answer
-
-2) Explanation:
-- bullet points
-- each idea on a new line
-
-3) Step-by-step:
-Step 1:
-Step 2:
-Step 3:
-
-4) Example:
-- simple and practical
-
-5) Key Insight:
-- important rule or formula
-
-RULES:
-- Use spacing and structure
-- Keep paragraphs short
-- Use LaTeX for math like $x^2 + y^2$
-- Always use chat history
+Rules:
+- No unnecessary questions
+- Always structured
+- Simple language
+- Use LaTeX if needed
 """
 
 
-# =====================
-# AI MEMORY FIXED
-# =====================
-
 def ask_ai(chat_id, question, subject):
 
-    try:
-        history = get_messages(chat_id)
+    history = get_messages(chat_id)
 
-        messages = [
-            {
-                "role": "system",
-                "content": system_prompt(subject)
-            }
-        ]
+    messages = [{"role": "system", "content": prompt(subject)}]
 
-        for role, content in history:
-            messages.append({
-                "role": role,
-                "content": content
-            })
+    for r, c in history:
+        messages.append({"role": r, "content": c})
 
-        messages.append({
-            "role": "user",
-            "content": question
-        })
+    messages.append({"role": "user", "content": question})
 
-        res = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=messages,
-            temperature=0.3
-        )
+    res = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=messages,
+        temperature=0.3
+    )
 
-        return highlight_math(res.choices[0].message.content)
-
-    except:
-        return "AI error."
+    return res.choices[0].message.content
 
 
 # =====================
@@ -290,21 +198,13 @@ if "chat_id" not in st.session_state:
 
 
 # =====================
-# CHAT TITLE
-# =====================
-
-def make_title(text):
-    return text[:45] + "..." if len(text) > 45 else text
-
-
-# =====================
 # SIDEBAR
 # =====================
 
 with st.sidebar:
 
     st.title("⚒️ StudyForge")
-    st.caption(f"{VERSION} | Created by {CREATOR}")
+    st.caption(f"{VERSION} | {CREATOR}")
 
     if st.button("➕ New Chat"):
         st.session_state.chat_id = create_chat()
@@ -335,84 +235,67 @@ for role, msg in get_messages(st.session_state.chat_id):
 
     box = "user-box" if role == "user" else "ai-box"
 
-    st.markdown(
-        f"""
-        <div class="{box}" style="
-            white-space: pre-wrap;
-            line-height: 1.7;
-            font-size: 15px;
-        ">
-        {msg}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown(f"""
+    <div class="{box}">
+    {msg}
+    </div>
+    """, unsafe_allow_html=True)
 
 
-question = st.chat_input("Ask anything...")
+# =====================
+# INPUT
+# =====================
 
-if question:
+q = st.chat_input("Ask anything...")
 
-    save_message(st.session_state.chat_id, "user", question)
+if q:
 
-    subject = detect_subject(question)
+    save_message(st.session_state.chat_id, "user", q)
 
-    answer = ask_ai(st.session_state.chat_id, question, subject)
+    subject = detect_subject(q)
 
-    save_message(st.session_state.chat_id, "assistant", answer)
+    ans = ask_ai(st.session_state.chat_id, q, subject)
 
-    chats = get_chats()
-    for cid, title in chats:
-        if cid == st.session_state.chat_id and title == "New Chat":
-            update_title(cid, make_title(question))
+    save_message(st.session_state.chat_id, "assistant", ans)
 
     st.rerun()
 
 
 # =====================
-# ADMIN (FIXED + STABLE)
+# ADMIN (FIXED / SAFE)
 # =====================
 
-if "admin_access" not in st.session_state:
-    st.session_state.admin_access = False
+if "admin" not in st.session_state:
+    st.session_state.admin = False
 
 
 st.sidebar.divider()
-st.sidebar.subheader("🔐 Admin")
+st.sidebar.subheader("Admin Console")
 
-admin_input = st.sidebar.text_input("Enter /admin <password>", type="password")
+cmd = st.sidebar.text_input("Command (/login, /stats, /db)")
 
-if admin_input.startswith("/admin"):
+if cmd:
 
-    parts = admin_input.split(" ", 1)
+    parts = cmd.split(" ")
+    action = parts[0]
 
-    if len(parts) == 2:
+    if action == "/login" and len(parts) > 1:
+        if st.secrets.get("ADMIN_PASSWORD","") == parts[1]:
+            st.session_state.admin = True
+            st.sidebar.success("Admin logged in")
+        else:
+            st.sidebar.error("Wrong password")
 
-        password = parts[1]
+    elif action == "/logout":
+        st.session_state.admin = False
+        st.sidebar.info("Logged out")
 
-        if password == st.secrets.get("ADMIN_PASSWORD", ""):
-            st.session_state.admin_access = True
-            st.sidebar.success("Admin Access Granted")
-        elif password:
-            st.sidebar.error("Wrong Password")
+    elif action == "/stats" and st.session_state.admin:
+        st.sidebar.write("Users:", cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0])
+        st.sidebar.write("Chats:", cursor.execute("SELECT COUNT(*) FROM chats").fetchone()[0])
+        st.sidebar.write("Messages:", cursor.execute("SELECT COUNT(*) FROM messages").fetchone()[0])
 
-
-if st.session_state.admin_access:
-
-    st.sidebar.markdown("### 📊 Stats")
-
-    st.sidebar.write("Users:", cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0])
-    st.sidebar.write("Chats:", cursor.execute("SELECT COUNT(*) FROM chats").fetchone()[0])
-    st.sidebar.write("Messages:", cursor.execute("SELECT COUNT(*) FROM messages").fetchone()[0])
-
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "rb") as f:
-            st.sidebar.download_button(
-                "Download DB",
-                f.read(),
-                file_name=DB_FILE
-            )
-
-    if st.sidebar.button("Logout Admin"):
-        st.session_state.admin_access = False
-        st.rerun()
+    elif action == "/db" and st.session_state.admin:
+        if os.path.exists(DB_FILE):
+            with open(DB_FILE, "rb") as f:
+                st.sidebar.download_button("Download DB", f.read(), file_name=DB_FILE)
