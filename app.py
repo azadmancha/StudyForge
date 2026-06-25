@@ -3,6 +3,7 @@ import sqlite3
 from groq import Groq
 import uuid
 from datetime import datetime
+import os
 
 
 # =====================
@@ -15,27 +16,30 @@ st.set_page_config(
     layout="wide"
 )
 
-VERSION = "v1.7"
+VERSION = "v1.8"
 CREATOR = "Azad"
+DB_FILE = "studyforge_v18.db"
 
+
+# =====================
+# CSS
+# =====================
 
 st.markdown("""
 <style>
-
 .user-box {
-background: rgba(70,120,255,0.18);
-padding:14px;
-border-radius:14px;
-margin:10px 0;
+    background: rgba(70,120,255,0.18);
+    padding:14px;
+    border-radius:14px;
+    margin:10px 0;
 }
 
 .ai-box {
-background: rgba(140,140,140,0.18);
-padding:14px;
-border-radius:14px;
-margin:10px 0;
+    background: rgba(140,140,140,0.18);
+    padding:14px;
+    border-radius:14px;
+    margin:10px 0;
 }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -45,26 +49,18 @@ margin:10px 0;
 # =====================
 
 if "GROQ_API_KEY" not in st.secrets:
-    st.error("Missing GROQ_API_KEY in Streamlit Secrets")
+    st.error("Missing GROQ_API_KEY")
     st.stop()
 
-
-client = Groq(
-    api_key=st.secrets["GROQ_API_KEY"]
-)
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 
 # =====================
-# DATABASE v1.7
+# DB
 # =====================
 
-db = sqlite3.connect(
-    "studyforge_v17.db",
-    check_same_thread=False
-)
-
+db = sqlite3.connect(DB_FILE, check_same_thread=False)
 cursor = db.cursor()
-
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users(
@@ -72,7 +68,6 @@ id TEXT PRIMARY KEY,
 name TEXT
 )
 """)
-
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS chats(
@@ -83,7 +78,6 @@ created TEXT
 )
 """)
 
-
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS messages(
 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,9 +87,7 @@ content TEXT
 )
 """)
 
-
 db.commit()
-
 
 
 # =====================
@@ -103,437 +95,179 @@ db.commit()
 # =====================
 
 if "user_id" not in st.session_state:
-
     st.session_state.user_id = str(uuid.uuid4())
 
     cursor.execute(
-        """
-        INSERT INTO users
-        VALUES (?,?)
-        """,
-        (
-            st.session_state.user_id,
-            "User"
-        )
+        "INSERT INTO users VALUES (?,?)",
+        (st.session_state.user_id, "Student")
     )
-
     db.commit()
-
 
 
 # =====================
 # CHAT FUNCTIONS
 # =====================
 
-def create_chat():
-
+def create_chat(title="New Chat"):
     cid = str(uuid.uuid4())
 
-    cursor.execute(
-        """
-        INSERT INTO chats
-        VALUES (?,?,?,?)
-        """,
-        (
-            cid,
-            st.session_state.user_id,
-            "New Chat",
-            str(datetime.now())
-        )
-    )
+    cursor.execute("""
+        INSERT INTO chats VALUES (?,?,?,?)
+    """, (
+        cid,
+        st.session_state.user_id,
+        title,
+        str(datetime.now())
+    ))
 
     db.commit()
-
     return cid
 
 
-
 def get_chats():
-
-    cursor.execute(
-        """
-        SELECT id,title
-        FROM chats
+    cursor.execute("""
+        SELECT id,title FROM chats
         WHERE user_id=?
         ORDER BY created DESC
-        """,
-        (st.session_state.user_id,)
-    )
+    """, (st.session_state.user_id,))
 
     return cursor.fetchall()
 
+
+def update_chat_title(chat_id, title):
+    cursor.execute("""
+        UPDATE chats SET title=?
+        WHERE id=?
+    """, (title, chat_id))
+    db.commit()
 
 
 def save_message(chat, role, text):
-
-    cursor.execute(
-        """
-        INSERT INTO messages
-        (chat_id,role,content)
+    cursor.execute("""
+        INSERT INTO messages(chat_id,role,content)
         VALUES (?,?,?)
-        """,
-        (
-            chat,
-            role,
-            text
-        )
-    )
-
+    """, (chat, role, text))
     db.commit()
 
 
-
 def get_messages(chat):
-
-    cursor.execute(
-        """
-        SELECT role,content
-        FROM messages
+    cursor.execute("""
+        SELECT role,content FROM messages
         WHERE chat_id=?
         ORDER BY id
-        """,
-        (chat,)
-    )
+    """, (chat,))
 
     return cursor.fetchall()
 
 
-
 def delete_chat(chat):
-
-    cursor.execute(
-        "DELETE FROM chats WHERE id=?",
-        (chat,)
-    )
-
-    cursor.execute(
-        "DELETE FROM messages WHERE chat_id=?",
-        (chat,)
-    )
-
+    cursor.execute("DELETE FROM chats WHERE id=?", (chat,))
+    cursor.execute("DELETE FROM messages WHERE chat_id=?", (chat,))
     db.commit()
 
 
-
 # =====================
-# SESSION
+# SUBJECT DETECTION
 # =====================
-
-if "chat_id" not in st.session_state:
-
-    chats = get_chats()
-
-    if chats:
-        st.session_state.chat_id = chats[0][0]
-
-    else:
-        st.session_state.chat_id = create_chat()
-
-# =====================
-# SUBJECTS
-# =====================
-
-SUBJECTS = [
-"Mathematics",
-"Physics",
-"Chemistry",
-"Biology",
-"Computer Science",
-"English",
-"History",
-"Geography",
-"Economics",
-"Social Science",
-"General"
-]
-
 
 def detect_subject(q):
-
     q = q.lower()
 
-
     data = {
-
-    "Mathematics":
-    [
-    "math",
-    "equation",
-    "algebra",
-    "calculus",
-    "geometry",
-    "probability",
-    "trigonometry",
-    "statistics"
-    ],
-
-
-    "Physics":
-    [
-    "force",
-    "energy",
-    "motion",
-    "velocity",
-    "acceleration",
-    "physics",
-    "electricity",
-    "wave"
-    ],
-
-
-    "Chemistry":
-    [
-    "atom",
-    "reaction",
-    "chemical",
-    "chemistry",
-    "molecule",
-    "bond"
-    ],
-
-
-    "Biology":
-    [
-    "cell",
-    "dna",
-    "biology",
-    "organ",
-    "genetics"
-    ],
-
-
-    "Computer Science":
-    [
-    "code",
-    "python",
-    "program",
-    "algorithm",
-    "database",
-    "api",
-    "computer"
-    ],
-
-
-    "English":
-    [
-    "grammar",
-    "essay",
-    "writing",
-    "literature",
-    "vocabulary"
-    ],
-
-
-    "History":
-    [
-    "war",
-    "empire",
-    "history",
-    "civilization",
-    "revolution"
-    ],
-
-
-    "Geography":
-    [
-    "earth",
-    "climate",
-    "map",
-    "geography",
-    "environment"
-    ],
-
-
-    "Economics":
-    [
-    "market",
-    "demand",
-    "supply",
-    "economics",
-    "inflation"
-    ],
-
-
-    "Social Science":
-    [
-    "government",
-    "society",
-    "politics",
-    "culture"
-    ]
-
+        "Math": ["math","algebra","geometry","equation"],
+        "Physics": ["force","energy","motion","velocity"],
+        "Chemistry": ["atom","reaction","chemical"],
+        "CS": ["code","python","algorithm","api"],
+        "English": ["essay","grammar","writing"],
+        "History": ["war","empire","history"],
     }
-
 
     scores = {}
 
-    for subject,words in data.items():
+    for s, words in data.items():
+        scores[s] = sum(w in q for w in words)
 
-        scores[subject] = sum(
-            word in q for word in words
-        )
+    best = max(scores, key=scores.get)
 
-
-    best = max(
-        scores,
-        key=scores.get
-    )
-
-
-    if scores[best] == 0:
-        return "General"
-
-
-    return best
-
+    return best if scores[best] > 0 else "General"
 
 
 # =====================
 # AI
 # =====================
 
-
-def build_prompt(
-    question,
-    subject,
-    depth,
-    mode
-):
-
+def build_prompt(q, subject):
     return f"""
+You are StudyForge AI created by Azad.
 
-You are StudyForge AI Tutor.
-
-You were created by Azad.
-
-Never say you were created by Meta,
-OpenAI, or any other company.
-
-Subject:
-{subject}
-
-Learning depth:
-{depth}
-
-Mode:
-{mode}
+Subject: {subject}
 
 Rules:
-- Answer directly first.
-- Never ask "can you confirm?"
-- Do not ask unnecessary validation.
-- Adjust explanation to user level.
-- Simple questions get simple answers.
-- Teaching questions get step-by-step explanations.
+- Clear explanation first
+- Step by step if needed
+- No unnecessary questions
+- Be accurate
 
 Question:
-{question}
-
+{q}
 """
 
 
-
 def ask_ai(prompt):
-
     try:
-
-        response = client.chat.completions.create(
-
+        res = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-
-            messages=[
-                {
-                    "role":"user",
-                    "content":prompt
-                }
-            ],
-
+            messages=[{"role":"user","content":prompt}],
             temperature=0.3
         )
+        return res.choices[0].message.content
+    except:
+        return "AI error."
 
 
-        return response.choices[0].message.content
+# =====================
+# SESSION CHAT
+# =====================
+
+if "chat_id" not in st.session_state:
+    chats = get_chats()
+    st.session_state.chat_id = chats[0][0] if chats else create_chat()
 
 
-    except Exception:
+# =====================
+# AUTO TITLE SYSTEM
+# =====================
 
-        return "AI error. Check Groq settings."
-
+def generate_title(text):
+    return text[:40] + "..." if len(text) > 40 else text
 
 
 # =====================
 # SIDEBAR
 # =====================
 
-
 with st.sidebar:
 
     st.title("⚒️ StudyForge")
-
-    st.caption(
-        f"{VERSION} | Created by {CREATOR}"
-    )
-
+    st.caption(f"{VERSION} | Created by {CREATOR}")
 
     if st.button("➕ New Chat"):
-
         st.session_state.chat_id = create_chat()
         st.rerun()
 
-
-
     st.divider()
 
-    st.subheader("Your Chats")
+    st.subheader("Chats")
 
-
-    for cid,title in get_chats():
-
-        if st.button(
-            title,
-            key=cid
-        ):
-
+    for cid, title in get_chats():
+        if st.button(title, key=cid):
             st.session_state.chat_id = cid
             st.rerun()
 
-
-
-    st.divider()
-
-
-    depth = st.selectbox(
-        "Learning Depth",
-        [
-        "Quick",
-        "Balanced",
-        "Deep Dive",
-        "Expert"
-        ]
-    )
-
-
-    mode = st.selectbox(
-        "Mode",
-        [
-        "Normal",
-        "Exam Prep",
-        "Hint Mode",
-        "Concept Builder"
-        ]
-    )
-
-
-    if st.button("Delete Current Chat"):
-
-        delete_chat(
-            st.session_state.chat_id
-        )
-
-        st.session_state.chat_id=create_chat()
-
+    if st.button("🗑 Delete Chat"):
+        delete_chat(st.session_state.chat_id)
+        st.session_state.chat_id = create_chat()
         st.rerun()
-
 
 
 # =====================
@@ -542,122 +276,61 @@ with st.sidebar:
 
 st.title("⚒️ StudyForge AI")
 
-st.caption(
-    f"{VERSION} — Created by {CREATOR}"
-)
+
+for role, msg in get_messages(st.session_state.chat_id):
+
+    box = "user-box" if role == "user" else "ai-box"
+
+    st.markdown(f"<div class='{box}'>{msg}</div>", unsafe_allow_html=True)
 
 
-st.subheader("Available Subjects")
-
-st.write(
-    " • ".join(SUBJECTS)
-)
-
-
-
-for role,msg in get_messages(
-    st.session_state.chat_id
-):
-
-    box = (
-        "user-box"
-        if role=="user"
-        else "ai-box"
-    )
-
-
-    st.markdown(
-        f"""
-        <div class="{box}">
-        {msg}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-
-question = st.chat_input(
-    "Ask anything..."
-)
-
-
+question = st.chat_input("Ask anything...")
 
 if question:
 
-
-    save_message(
-        st.session_state.chat_id,
-        "user",
-        question
-    )
-
+    save_message(st.session_state.chat_id, "user", question)
 
     subject = detect_subject(question)
 
-
     with st.spinner("Thinking..."):
+        answer = ask_ai(build_prompt(question, subject))
 
+    save_message(st.session_state.chat_id, "assistant", answer)
 
-        answer = ask_ai(
-            build_prompt(
-                question,
-                subject,
-                depth,
-                mode
-            )
-        )
-
-
-
-    save_message(
-        st.session_state.chat_id,
-        "assistant",
-        answer
-    )
-
+    # AUTO TITLE (first message only)
+    chats = get_chats()
+    for cid, title in chats:
+        if cid == st.session_state.chat_id and title == "New Chat":
+            update_chat_title(cid, generate_title(question))
 
     st.rerun()
 
 
-                # =====================
-# ADMIN PANEL
+# =====================
+# ADMIN (COMMAND BASED)
 # =====================
 
-import os
+admin_input = st.text_input("")
 
-with st.sidebar:
+if admin_input.startswith("/admin"):
 
-    st.divider()
-    st.subheader("🔐 Admin")
+    try:
+        password = admin_input.split(" ",1)[1]
+    except:
+        password = ""
 
-    admin_password = st.text_input(
-        "Admin Password",
-        type="password"
-    )
+    if password == st.secrets.get("ADMIN_PASSWORD",""):
+        st.success("Admin Access Granted")
 
-    if admin_password == st.secrets["ADMIN_PASSWORD"]:
+        st.subheader("📊 Admin Panel")
 
-        st.success("Admin access granted")
+        st.write("Users:", cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0])
+        st.write("Chats:", cursor.execute("SELECT COUNT(*) FROM chats").fetchone()[0])
+        st.write("Messages:", cursor.execute("SELECT COUNT(*) FROM messages").fetchone()[0])
 
-        if os.path.exists("studyforge.db"):
+        if os.path.exists(DB_FILE):
+            with open(DB_FILE,"rb") as f:
+                st.download_button("Download DB", f, file_name=DB_FILE)
 
-            with open("studyforge.db", "rb") as f:
-
-                st.download_button(
-                    label="Download Database",
-                    data=f,
-                    file_name="studyforge.db",
-                    mime="application/octet-stream"
-                )
-
-        st.write("Chats:", len(get_chats()))
-
-    elif admin_password:
-        st.error("Wrong password")
-
-import os
-
-st.sidebar.write("DB exists:", os.path.exists("studyforge.db"))
-st.sidebar.write("Current files:", os.listdir())
-
+    else:
+        st.error("Invalid admin password")
