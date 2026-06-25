@@ -1,103 +1,284 @@
-# ⚒️ StudyForge
+# ⚒️ StudyForge AI
 
-### Your AI-powered learning workspace
+Hi, I'm Azad — a high school student interested in AI, software engineering, and education.
 
-StudyForge is a student-built AI tutor designed to make learning easier, more interactive, and personalised.
+## What is StudyForge?
 
-It helps students understand difficult concepts by providing clear explanations, guided solutions, and exam-focused support.
+StudyForge is an AI-powered learning assistant built to help students understand concepts, solve problems, and learn at their own pace.
 
-🌐 **Live Demo:**  
-[Open StudyForge](https://studyforge.streamlit.app/)
+The idea came from something I noticed while studying and tutoring:
+
+Students often do not struggle because they cannot learn — they struggle because explanations are not always personalised to their level.
+
+A textbook gives one explanation.
+A classroom moves at one pace.
+But every student learns differently.
+
+StudyForge is my attempt to explore how AI can make learning support more accessible and adaptive.
 
 ---
 
-## ✨ Features
+## 🚀 Live Demo
 
-### 🤖 AI Tutor
+Try StudyForge here:
 
-- Ask questions naturally
-- Get step-by-step explanations
-- Continue conversations with follow-up questions
-- Receive student-friendly explanations
+https://studyforge.streamlit.app
 
-### 📚 Current Subjects
+---
+
+# Current Version
+
+## v1.7
+
+Current focus:
+
+Building the foundation of a personalised AI learning system.
+
+---
+
+# Features
+
+## 🤖 AI Tutor
+
+StudyForge can help with:
+
+- Concept explanations
+- Step-by-step learning
+- Problem solving guidance
+- Exam preparation
+- Writing assistance
+
+
+## 📚 Subjects Supported
+
+Currently supports:
 
 - Mathematics
 - Physics
+- Chemistry
+- Biology
+- Computer Science
+- English
+- History
+- Geography
+- Economics
+- Social Science
+- General questions
 
-### 🧠 Learning Controls
 
-**Learning Depth**
-- Basic
-- Standard
-- Deep Dive
+## 🎯 Learning Depth
 
-Adjusts the level of explanation based on how much detail the student needs.
+Students can choose the level of explanation:
 
-**Exam Mode**
-- Provides structured exam-style answers
-- Focuses on formulas, methods, and final answers
+**Quick**
+- Short answers for fast understanding
 
-**Hint Mode**
-- Gives guidance and hints instead of immediately revealing the full solution
+**Balanced**
+- Normal explanations with enough detail
 
-### 💬 Smart Chat Experience
+**Deep Dive**
+- Detailed explanations and reasoning
 
-- Chat-style interface
-- Conversation memory during sessions
-- Natural follow-up learning
+**Expert**
+- Advanced-level explanations
 
-### 🎨 Interface
 
-- Clean Streamlit UI
-- Sidebar navigation
-- Simple learning-focused design
+## 🧠 Learning Modes
 
----
+Available modes:
 
-## 🎯 Why StudyForge?
+- Normal
+- Exam Prep
+- Hint Mode
+- Concept Builder
 
-Students often struggle not because they cannot learn, but because explanations are not always given in a way that matches their learning style.
 
-StudyForge explores how AI can make studying more interactive by acting as a personal learning assistant.
+## 💬 Chat System
 
----
+StudyForge includes:
 
-## 🛠️ Tech Stack
-
-- Python
-- Streamlit
-- Groq API
-- Llama AI model
-
----
-
-## 🚀 Future Improvements
-
-- More subjects:
-  - Chemistry
-  - Biology
-  - Social Studies
-  - English
-
-- Multi-model AI verification
-- PDF notes assistant
-- Practice quiz generation
-- Learning analytics dashboard
-- Personalised study recommendations
+- Multiple conversations
+- Separate chats
+- Saved chat history
+- Personal conversations
 
 ---
 
-## 👨‍💻 Creator
+# How It Works
 
-Built by **Azad**, a Grade 12 student interested in AI, technology, and building useful tools.
+Student Question
+
+↓
+
+StudyForge Interface
+
+↓
+
+Python Application
+
+↓
+
+AI Model
+
+↓
+
+Generated Explanation
+
+↓
+
+Saved Conversation
 
 ---
 
-## 📌 Project Status
+# Technology Stack
 
-**Version 1 — Live and improving**
+## Frontend
 
-A student-built AI education project focused on making learning simpler and more accessible.
+**Streamlit**
 
-coming soon v2
+Used for:
+- User interface
+- Chat experience
+- Interaction
+
+
+## Backend
+
+**Python**
+
+Handles:
+- Application logic
+- AI prompts
+- Data handling
+
+
+## AI
+
+**Groq API + LLM**
+
+Used for:
+- Generating explanations
+- Answering questions
+- Learning assistance
+
+
+## Database
+
+**SQLite**
+
+Used for:
+- Chat storage
+- Conversation history
+- User data
+
+---
+
+# Why I Built This
+
+While learning and tutoring, I noticed that students often need more than just resources.
+
+They need explanations that match their current understanding.
+
+I wanted to build a tool that could provide:
+
+- faster feedback
+- personalised explanations
+- a more interactive learning experience
+
+StudyForge started as an experiment with AI, but became a way for me to explore software engineering and educational technology.
+
+---
+
+# Challenges & Lessons
+
+Building StudyForge taught me that an AI application is not only about connecting an AI model.
+
+Some challenges I worked through:
+
+- Making AI responses more useful for different learning levels
+- Designing a better chat experience
+- Managing conversations and stored data
+- Thinking about how software should be structured
+
+The project continues to evolve as I learn more about programming, AI, and system design.
+
+---
+
+# Roadmap
+
+## Personalisation
+
+Planned:
+
+- User accounts
+- Student profiles
+- Learning preferences
+- Personal goals
+
+
+## Learning Analytics
+
+Planned:
+
+- Weakness tracking
+- Topic mastery
+- Progress dashboard
+- Improvement suggestions
+
+
+## Assessment System
+
+Planned:
+
+- AI quiz generator
+- Practice questions
+- Exam simulation
+- Mistake analysis
+
+
+## Knowledge System
+
+Planned:
+
+- Notes upload
+- Textbook integration
+- PDF support
+- RAG-based answers
+
+
+## Future Engineering Upgrade
+
+Planned:
+
+Frontend:
+- React
+- Tailwind CSS
+
+Backend:
+- FastAPI
+
+Database:
+- PostgreSQL
+
+---
+
+# Project Documentation
+
+Detailed project notes:
+
+- `docs/journey.md`
+- `docs/architecture.md`
+- `docs/roadmap.md`
+- `docs/decisions.md`
+
+---
+
+# Author
+
+Created by **Azad**
+
+A student project exploring:
+
+- Artificial Intelligence
+- Software Engineering
+- Education Technology
