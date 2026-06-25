@@ -22,7 +22,7 @@ DB_FILE = "studyforge_v18.db"
 
 
 # =====================
-# CSS
+# UI STYLE
 # =====================
 
 st.markdown("""
@@ -56,7 +56,7 @@ client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 
 # =====================
-# DB
+# DATABASE
 # =====================
 
 db = sqlite3.connect(DB_FILE, check_same_thread=False)
@@ -91,7 +91,7 @@ db.commit()
 
 
 # =====================
-# USER
+# USER INIT
 # =====================
 
 if "user_id" not in st.session_state:
@@ -134,7 +134,7 @@ def get_chats():
     return cursor.fetchall()
 
 
-def update_chat_title(chat_id, title):
+def update_title(chat_id, title):
     cursor.execute("""
         UPDATE chats SET title=?
         WHERE id=?
@@ -156,7 +156,6 @@ def get_messages(chat):
         WHERE chat_id=?
         ORDER BY id
     """, (chat,))
-
     return cursor.fetchall()
 
 
@@ -174,12 +173,12 @@ def detect_subject(q):
     q = q.lower()
 
     data = {
-        "Math": ["math","algebra","geometry","equation"],
+        "Math": ["math","algebra","equation","geometry"],
         "Physics": ["force","energy","motion","velocity"],
         "Chemistry": ["atom","reaction","chemical"],
         "CS": ["code","python","algorithm","api"],
         "English": ["essay","grammar","writing"],
-        "History": ["war","empire","history"],
+        "History": ["war","empire","history"]
     }
 
     scores = {}
@@ -188,39 +187,117 @@ def detect_subject(q):
         scores[s] = sum(w in q for w in words)
 
     best = max(scores, key=scores.get)
-
     return best if scores[best] > 0 else "General"
 
 
 # =====================
-# AI
+# SYSTEM PROMPT (OPTIMIZED TUTOR)
 # =====================
 
-def build_prompt(q, subject):
+def system_prompt(subject):
     return f"""
-You are StudyForge AI created by Azad.
+You are StudyForge AI, a world-class personal tutor created by Azad.
+
+You are NOT a chatbot. You are a learning system.
 
 Subject: {subject}
 
-Rules:
-- Clear explanation first
-- Step by step if needed
-- No unnecessary questions
-- Be accurate
+=====================
+GOAL
+=====================
+Make the student UNDERSTAND deeply, not just receive answers.
 
-Question:
-{q}
+=====================
+TEACHING RULES
+=====================
+1. Start simple → then build depth
+2. Explain step-by-step if needed
+3. Use examples only when useful
+4. Adjust difficulty automatically
+5. Never be vague
+
+=====================
+MODES
+=====================
+Quick → short answer
+Balanced → explanation + example
+Deep Dive → full reasoning
+Expert → formal + edge cases
+
+Hint Mode:
+- give hints first
+- avoid full solution unless asked
+
+Exam Prep:
+- shortcuts
+- patterns
+- tricks
+- speed focus
+
+Concept Builder:
+- connect ideas
+- show relationships
+
+=====================
+MEMORY RULE
+=====================
+- Use full chat history
+- Treat conversation as continuous tutoring session
+- Resolve "this / that / it" from context
+
+=====================
+OUTPUT STRUCTURE
+=====================
+1. Direct answer
+2. Explanation
+3. Example (if needed)
+4. Summary
+
+=====================
+BEHAVIOR
+=====================
+- Do NOT ask unnecessary questions
+- Do NOT restart explanations
+- Be clear and confident
+- Stay consistent with past messages
 """
 
 
-def ask_ai(prompt):
+# =====================
+# AI CALL WITH MEMORY FIX
+# =====================
+
+def ask_ai(chat_id, question, subject):
+
     try:
+        history = get_messages(chat_id)
+
+        messages = [
+            {
+                "role": "system",
+                "content": system_prompt(subject)
+            }
+        ]
+
+        for role, content in history:
+            messages.append({
+                "role": role,
+                "content": content
+            })
+
+        messages.append({
+            "role": "user",
+            "content": question
+        })
+
         res = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[{"role":"user","content":prompt}],
+            messages=messages,
             temperature=0.3
         )
+
         return res.choices[0].message.content
+
     except:
         return "AI error."
 
@@ -235,11 +312,11 @@ if "chat_id" not in st.session_state:
 
 
 # =====================
-# AUTO TITLE SYSTEM
+# AUTO TITLE
 # =====================
 
-def generate_title(text):
-    return text[:40] + "..." if len(text) > 40 else text
+def make_title(text):
+    return text[:45] + "..." if len(text) > 45 else text
 
 
 # =====================
@@ -276,7 +353,6 @@ with st.sidebar:
 
 st.title("⚒️ StudyForge AI")
 
-
 for role, msg in get_messages(st.session_state.chat_id):
 
     box = "user-box" if role == "user" else "ai-box"
@@ -292,22 +368,21 @@ if question:
 
     subject = detect_subject(question)
 
-    with st.spinner("Thinking..."):
-        answer = ask_ai(build_prompt(question, subject))
+    answer = ask_ai(st.session_state.chat_id, question, subject)
 
     save_message(st.session_state.chat_id, "assistant", answer)
 
-    # AUTO TITLE (first message only)
+    # auto title if new chat
     chats = get_chats()
     for cid, title in chats:
         if cid == st.session_state.chat_id and title == "New Chat":
-            update_chat_title(cid, generate_title(question))
+            update_title(cid, make_title(question))
 
     st.rerun()
 
 
 # =====================
-# ADMIN (COMMAND BASED)
+# ADMIN (/admin password)
 # =====================
 
 admin_input = st.text_input("")
@@ -315,22 +390,19 @@ admin_input = st.text_input("")
 if admin_input.startswith("/admin"):
 
     try:
-        password = admin_input.split(" ",1)[1]
+        password = admin_input.split(" ", 1)[1]
     except:
         password = ""
 
-    if password == st.secrets.get("ADMIN_PASSWORD",""):
+    if password == st.secrets.get("ADMIN_PASSWORD", ""):
+
         st.success("Admin Access Granted")
 
-        st.subheader("📊 Admin Panel")
+        st.subheader("📊 Admin Dashboard")
 
         st.write("Users:", cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0])
         st.write("Chats:", cursor.execute("SELECT COUNT(*) FROM chats").fetchone()[0])
         st.write("Messages:", cursor.execute("SELECT COUNT(*) FROM messages").fetchone()[0])
 
         if os.path.exists(DB_FILE):
-            with open(DB_FILE,"rb") as f:
-                st.download_button("Download DB", f, file_name=DB_FILE)
-
-    else:
-        st.error("Invalid admin password")
+            with open(DB_FILE, "rb") as f:
