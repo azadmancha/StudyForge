@@ -655,3 +655,9 @@ with st.sidebar:
 
     elif admin_password:
         st.error("Wrong password")
+
+import os
+
+st.sidebar.write("DB exists:", os.path.exists("studyforge.db"))
+st.sidebar.write("Current files:", os.listdir())
+
